@@ -587,6 +587,63 @@ function render(games, isRefresh = false) {
 // ============================================================
 // END OF CHUNK 3
 // ============================================================
+// ============================================================
+// CHUNK 4 — INIT + MAIN LOOP + DEBUG
+// ============================================================
+
+dbgGroup("CHUNK 4 LOADED — Init + Main Loop");
+
+// ------------------------------------------------------------
+// MAIN RUN FUNCTION
+// ------------------------------------------------------------
+async function run(isRefresh = false) {
+  dbgGroup(`RUN() CALLED — isRefresh=${isRefresh}`);
+
+  try {
+    dbg("Calling fetchScheduleGames()…", "#4da6ff");
+    const games = await fetchScheduleGames();
+
+    dbg(`fetchScheduleGames() returned ${games.length} games`, "#00ffff");
+
+    render(games, isRefresh);
+  } catch (e) {
+    dbg(`ERROR in run(): ${e}`, "#ff4444");
+  }
+
+  dbgGroupEnd();
+}
+
+// ------------------------------------------------------------
+// INIT FUNCTION
+// ------------------------------------------------------------
+function init() {
+  dbgGroup("INIT() CALLED");
+
+  dbg("Running initial fetch…", "#4da6ff");
+  run(false);
+
+  dbg(`Setting refresh interval: ${REFRESH_INTERVAL / 60000} minutes`, "#ccccff");
+
+  if (window.refreshIntervalId) clearInterval(window.refreshIntervalId);
+
+  window.refreshIntervalId = setInterval(() => {
+    dbg("Refresh interval reached — running refresh", "#ffaa00");
+    run(true);
+  }, REFRESH_INTERVAL);
+
+  dbgGroupEnd();
+}
+
+// ------------------------------------------------------------
+// START EVERYTHING
+// ------------------------------------------------------------
+dbg("Calling init() to start ticker…", "#00ff00");
+init();
+
+dbgGroupEnd(); // CHUNK 4
+// ============================================================
+// END OF CHUNK 4
+// ============================================================
 </script>
 </body>
 </html>
