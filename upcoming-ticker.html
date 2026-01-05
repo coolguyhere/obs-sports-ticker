@@ -298,7 +298,7 @@ async function fetchTeamRecord(sport, league, teamId) {
 // ------------------------------------------------------------
 // Fetch Schedule Games (MAIN PIPELINE)
 // ------------------------------------------------------------
-async function fetchScheduleGames() {
+async function fetchHybridGames() {
   dbgGroup("FETCHING SCHEDULE GAMES");
 
   let playoffGames = [];
@@ -600,7 +600,7 @@ async function run(isRefresh = false) {
   dbgGroup(`RUN() CALLED — isRefresh=${isRefresh}`);
 
   try {
-    dbg("Calling fetchScheduleGames()…", "#4da6ff");
+    dbg("Calling fetchHybridGames()…", "#4da6ff");
     const games = await fetchHybridGames();
 
     dbg(`fetchHybridGames() returned ${games.length} games`, "#00ffff");
