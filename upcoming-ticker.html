@@ -108,33 +108,37 @@ html, body {
 </div>
 
 <script>
-// ---------------- CONFIG ----------------
+// ------------------------------------------------------------
+// CONFIG
+// ------------------------------------------------------------
 
 const PROXY = "https://api.allorigins.win/raw?url=";
 
+// Leagues + Schedule API base
 const leagues = [
   {
     code: "NFL",
-    scoreboard: "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard",
-    calendar:   "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?calendar=true"
+    sport: "football",
+    league: "nfl"
   },
   {
     code: "NBA",
-    scoreboard: "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard",
-    calendar:   "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?calendar=true"
-  },
-  {
-    code: "MLB",
-    scoreboard: "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard",
-    calendar:   "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard?calendar=true"
+    sport: "basketball",
+    league: "nba"
   },
   {
     code: "NHL",
-    scoreboard: "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard",
-    calendar:   "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard?calendar=true"
+    sport: "hockey",
+    league: "nhl"
+  },
+  {
+    code: "MLB",
+    sport: "baseball",
+    league: "mlb"
   }
 ];
 
+// Colors for pill backgrounds
 const leagueColors = {
   NFL: "#013369",
   NBA: "#17408B",
@@ -142,17 +146,18 @@ const leagueColors = {
   NHL: "#111111"
 };
 
+// Behavior settings
 const TOP_N = 5;
-
-// animation / timing
-const SCROLL_DURATION = 70000;          // match your existing 70s scroll
-const LOOP_PAUSE = 1500;                // 1.5s pause between loops
+const LOOP_PAUSE = 1500; // 1.5 seconds
 const REFRESH_INTERVAL = 10 * 60 * 1000; // 10 minutes
+const SCROLL_DURATION = 70000; // 70s scroll
 
 let loopTimeout = null;
 let refreshIntervalId = null;
 
-// ---------------- HELPERS ----------------
+// ------------------------------------------------------------
+// UTILITIES
+// ------------------------------------------------------------
 
 function formatPST(iso) {
   try {
@@ -169,14 +174,18 @@ function formatPST(iso) {
 }
 
 function winPct(team) {
-  if (!team.records) return 0.5;
-  const rec = team.records.find(r => r.type === "total") || team.records[0];
+  if (!team.record || !team.record.items || !team.record.items.length) return 0.5;
+
+  const rec = team.record.items.find(r => r.type === "total") || team.record.items[0];
   if (!rec || !rec.summary) return 0.5;
+
   const parts = rec.summary.split("-");
   if (parts.length < 2) return 0.5;
+
   const w = parseInt(parts[0], 10);
   const l = parseInt(parts[1], 10);
   if (w + l === 0) return 0.5;
+
   return w / (w + l);
 }
 
@@ -186,117 +195,158 @@ function anticipation(a, b) {
   return avg - diff;
 }
 
-// ---------------- CALENDAR FETCH ----------------
+// ------------------------------------------------------------
+// SEASON YEAR DETECTION
+// ------------------------------------------------------------
 
-async function getNextCalendarDates(league) {
+function getSeasonYear(leagueCode) {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+
+  if (leagueCode === "NBA" || leagueCode === "NHL") {
+    return month >= 10 ? year : year - 1;
+  }
+
+  if (leagueCode === "NFL") {
+    return year;
+  }
+
+  if (leagueCode === "MLB") {
+    return year;
+  }
+
+  return year;
+}
+
+// ------------------------------------------------------------
+// FETCH TEAM RECORDS
+// ------------------------------------------------------------
+
+async function fetchTeamRecord(sport, league, teamId) {
   try {
-    const url = PROXY + encodeURIComponent(league.calendar);
+    const url = PROXY + encodeURIComponent(
+      `https://sports.core.api.espn.com/v2/sports/${sport}/leagues/${league}/teams/${teamId}`
+    );
     const res = await fetch(url);
-    const data = await res.json();
-
-    if (!data.calendar) return [];
-
-    const future = [];
-
-    for (const block of data.calendar) {
-      for (const entry of block.entries) {
-        if (entry.startDate) {
-          const d = entry.startDate.substring(0, 10).replace(/-/g, "");
-          future.push(d);
-        }
-      }
-    }
-
-    return [...new Set(future)].slice(0, 12);
+    return await res.json();
   } catch {
-    return [];
+    return null;
   }
 }
 
-// ---------------- FETCH GAMES ----------------
+// ------------------------------------------------------------
+// FETCH SCHEDULE GAMES
+// ------------------------------------------------------------
 
-async function fetchGames() {
+async function fetchScheduleGames() {
   let playoffGames = [];
   let regularGames = [];
 
-  for (const league of leagues) {
-    const dates = await getNextCalendarDates(league);
-    if (!dates.length) continue;
+  for (const lg of leagues) {
+    const season = getSeasonYear(lg.code);
 
-    for (const date of dates) {
+    // Pull 30 days ahead
+    const now = new Date();
+    const end = new Date(now.getTime() + 30 * 86400000);
+
+    const startStr = now.toISOString().slice(0, 10).replace(/-/g, "");
+    const endStr = end.toISOString().slice(0, 10).replace(/-/g, "");
+
+    const url = PROXY + encodeURIComponent(
+      `https://sports.core.api.espn.com/v2/sports/${lg.sport}/leagues/${lg.league}/seasons/${season}/events?dates=${startStr}-${endStr}`
+    );
+
+    let data;
+    try {
+      const res = await fetch(url);
+      data = await res.json();
+    } catch {
+      continue;
+    }
+
+    if (!data.items) continue;
+
+    for (const item of data.items) {
       try {
-        const url = PROXY + encodeURIComponent(`${league.scoreboard}?dates=${date}`);
-        const res = await fetch(url);
-        const data = await res.json();
-        const events = data.events || [];
+        const evRes = await fetch(PROXY + encodeURIComponent(item.$ref));
+        const ev = await evRes.json();
 
-        for (const ev of events) {
-          const comp = ev.competitions?.[0];
-          if (!comp) continue;
+        const comp = ev.competitions?.[0];
+        if (!comp) continue;
 
-          const seasonType = comp.season?.type;
+        const seasonType = comp.season?.type;
+        if (![2, 3, 4].includes(seasonType)) continue;
 
-          // Only competitive games (2, 3, 4 style logic)
-          if (![2, 3].includes(seasonType)) continue;
+        const teams = comp.competitors || [];
+        const away = teams.find(t => t.homeAway === "away");
+        const home = teams.find(t => t.homeAway === "home");
+        if (!away || !home) continue;
 
-          const teams = comp.competitors || [];
-          const away = teams.find(t => t.homeAway === "away");
-          const home = teams.find(t => t.homeAway === "home");
-          if (!away || !home) continue;
+        // Fetch team records
+        const awayRec = await fetchTeamRecord(lg.sport, lg.league, away.id);
+        const homeRec = await fetchTeamRecord(lg.sport, lg.league, home.id);
 
-          const aStr = winPct(away);
-          const hStr = winPct(home);
-          const score = anticipation(aStr, hStr);
+        away.record = awayRec?.record || null;
+        home.record = homeRec?.record || null;
 
-          const game = {
-            league: league.code,
-            away,
-            home,
-            score,
-            rawDate: ev.date,
-            pst: formatPST(ev.date),
-            playoff: seasonType === 3,
-            playoffRound: comp.notes?.[0]?.headline || "Playoffs"
-          };
+        const aStr = winPct(away);
+        const hStr = winPct(home);
+        const score = anticipation(aStr, hStr);
 
-          if (game.playoff) playoffGames.push(game);
-          else regularGames.push(game);
-        }
+        const game = {
+          league: lg.code,
+          away,
+          home,
+          score,
+          rawDate: ev.date,
+          pst: formatPST(ev.date),
+          playoff: seasonType >= 3,
+          playoffRound: comp.notes?.[0]?.headline || "Playoffs"
+        };
+
+        if (game.playoff) playoffGames.push(game);
+        else regularGames.push(game);
+
       } catch {
-        // ignore individual fetch failures and keep going
+        continue;
       }
     }
   }
 
-  // sort playoff games by soonest date, then anticipation
+  // Sort playoff games
   playoffGames.sort((a, b) => {
     const d = new Date(a.rawDate) - new Date(b.rawDate);
     if (d !== 0) return d;
     return b.score - a.score;
   });
 
-  // sort regular games by anticipation score then date
+  // Sort regular games
   regularGames.sort((a, b) => {
     const s = b.score - a.score;
     if (s !== 0) return s;
     return new Date(a.rawDate) - new Date(b.rawDate);
   });
 
-  const combined = [...playoffGames, ...regularGames];
-  return combined.slice(0, TOP_N);
+  return [...playoffGames, ...regularGames].slice(0, TOP_N);
 }
 
-// ---------------- RENDER & LOOP ----------------
+// ------------------------------------------------------------
+// RENDERING
+// ------------------------------------------------------------
 
 function buildHTML(games) {
   return games.map(g => {
     const lc = leagueColors[g.league] || "#222";
+
     const aAbbr = g.away.team?.abbreviation || "";
     const hAbbr = g.home.team?.abbreviation || "";
+
     const aLogo = g.away.team?.logo;
     const hLogo = g.home.team?.logo;
-    const aRec = g.away.records?.[0]?.summary || "";
-    const hRec = g.home.records?.[0]?.summary || "";
+
+    const aRec = g.away.record?.items?.[0]?.summary || "";
+    const hRec = g.home.record?.items?.[0]?.summary || "";
 
     const playoffTag = g.playoff
       ? `<span class="game-meta">${g.league} • ${g.playoffRound} • ${g.pst}</span>`
@@ -319,25 +369,17 @@ function startLoop() {
   const ticker = document.getElementById("ticker");
   if (!ticker) return;
 
-  // clear any existing loop timer
-  if (loopTimeout) {
-    clearTimeout(loopTimeout);
-    loopTimeout = null;
-  }
+  if (loopTimeout) clearTimeout(loopTimeout);
 
-  // reset animation
   ticker.style.animation = "none";
-  // ensure opacity 1 before fade-in
   ticker.style.opacity = "0";
 
-  // force reflow
   void ticker.offsetWidth;
 
-  // quick fade-in + scroll (no fadeOut)
   const scrollSeconds = SCROLL_DURATION / 1000;
-  ticker.style.animation = `fadeIn 0.4s ease forwards, scroll ${scrollSeconds}s linear forwards`;
+  ticker.style.animation =
+    `fadeIn 0.4s ease forwards, scroll ${scrollSeconds}s linear forwards`;
 
-  // schedule next loop after scroll + pause
   loopTimeout = setTimeout(() => {
     startLoop();
   }, SCROLL_DURATION + LOOP_PAUSE);
@@ -346,56 +388,51 @@ function startLoop() {
 function render(games, isRefresh = false) {
   const wrap = document.getElementById("tickerWrap");
   const ticker = document.getElementById("ticker");
+
   if (!wrap || !ticker) return;
 
-  // never fully hide the bar; show a fallback message if no games
   if (!games.length) {
     wrap.classList.remove("hidden");
-    ticker.className = "ticker";
-    ticker.style.animation = "none";
+    ticker.innerHTML = "No upcoming games found.";
     ticker.style.opacity = "1";
-    ticker.innerHTML = "No top upcoming games found.";
+    ticker.style.animation = "none";
     return;
   }
 
   const newHTML = buildHTML(games);
 
-  // crossfade on refresh: fade out, swap content, fade in + restart loop
   if (isRefresh) {
-    wrap.classList.add("hidden"); // uses existing opacity transition
+    wrap.classList.add("hidden");
     setTimeout(() => {
-      ticker.className = "ticker";
       ticker.innerHTML = newHTML;
       wrap.classList.remove("hidden");
       startLoop();
-    }, 800); // matches .ticker-wrap transition: 0.8s
+    }, 800);
   } else {
     wrap.classList.remove("hidden");
-    ticker.className = "ticker";
     ticker.innerHTML = newHTML;
     startLoop();
   }
 }
 
-// ---------------- MAIN LOOP ----------------
+// ------------------------------------------------------------
+// MAIN LOOP
+// ------------------------------------------------------------
 
 async function run(isRefresh = false) {
   try {
-    const games = await fetchGames();
+    const games = await fetchScheduleGames();
     render(games, isRefresh);
   } catch {
-    // if fetch fails, keep whatever is currently on screen
+    // keep current display
   }
 }
 
 function init() {
-  // initial load
   run(false);
 
-  // periodic refresh every 10 minutes
-  if (refreshIntervalId) {
-    clearInterval(refreshIntervalId);
-  }
+  if (refreshIntervalId) clearInterval(refreshIntervalId);
+
   refreshIntervalId = setInterval(() => {
     run(true);
   }, REFRESH_INTERVAL);
