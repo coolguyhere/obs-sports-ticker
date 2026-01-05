@@ -578,73 +578,99 @@ function getNFLSeasonYear() {
 // NFL.COM POSTSEASON SCRAPER (ALL ROUNDS IN ONE PAGE)
 // ============================================================
 
+// ============================================================
+// ESPN SCOREBOARD POSTSEASON SCRAPER (REPLACES NFL.com POSTSEASON)
+// ============================================================
 async function fetchAllNFLPlayoffs() {
-  dbgGroup("NFL.COM POSTSEASON FETCH");
+  dbgGroup("ESPN POSTSEASON FETCH (used as NFL playoff source)");
 
   const seasonYear = getNFLSeasonYear();
-  const url = `https://www.nfl.com/schedules/${seasonYear}/postseason/`;
-
-  dbg(`NFL.com URL: ${url}`, "#4da6ff");
+  const games = [];
 
   try {
-    const res = await fetch(PROXY + encodeURIComponent(url));
-    const html = await res.text();
+    // ESPN uses seasontype=3 for postseason. We'll iterate week=1..6 to be safe.
+    // (Some seasons use 1..4; 6 is a safe upper bound for any playoff structure.)
+    for (let week = 1; week <= 6; week++) {
+      const url = `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?seasontype=3&season=${seasonYear}&week=${week}`;
+      dbg(`ESPN postseason URL (week ${week}): ${url}`, "#4da6ff");
 
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(html, "text/html");
-
-    const strips = doc.querySelectorAll(".nfl-c-matchup-strip");
-    dbg(`NFL.com matchup strips found: ${strips.length}`, "#ccccff");
-
-    const games = [];
-
-    strips.forEach(strip => {
+      let res, data;
       try {
-        const teamEls = strip.querySelectorAll(".nfl-c-matchup-strip__team-fullname");
-        if (teamEls.length < 2) return;
-
-        const awayName = teamEls[0].textContent.trim();
-        const homeName = teamEls[1].textContent.trim();
-
-        const dateEl = strip.querySelector(".nfl-c-matchup-strip__date");
-        const timeEl = strip.querySelector(".nfl-c-matchup-strip__time");
-        const networkEl = strip.querySelector(".nfl-c-matchup-strip__network");
-        const roundEl = strip.closest(".nfl-c-matchup-strip-container")
-          ?.querySelector(".d3-o-section-title");
-
-        const dateText = dateEl ? dateEl.textContent.trim() : "";
-        const timeText = timeEl ? timeEl.textContent.trim() : "";
-        const networkText = networkEl ? networkEl.textContent.trim() : "";
-        const roundText = roundEl ? roundEl.textContent.trim() : "Playoffs";
-
-        if (!dateText || !timeText) return;
-
-        const rawString = `${dateText} ${seasonYear} ${timeText} ET`;
-        const rawDate = new Date(rawString);
-        const iso = rawDate.toISOString();
-
-        games.push({
-          league: "NFL",
-          playoff: true,
-          playoffRound: roundText,
-          rawDate: iso,
-          pst: formatPST(iso),
-          network: networkText,
-          score: 1.0,
-          away: { rawName: awayName },
-          home: { rawName: homeName }
-        });
-      } catch (err) {
-        dbg(`NFL.com strip parse error: ${err}`, "#ff4444");
+        res = await fetch(PROXY + encodeURIComponent(url));
+        data = await res.json();
+      } catch (e) {
+        dbg(`ESPN fetch error (week ${week}): ${e}`, "#ff4444");
+        continue;
       }
-    });
 
-    dbg(`NFL.com parsed playoff games: ${games.length}`, "#00ffff");
+      const events = data.events || [];
+      dbg(`ESPN events found (week ${week}): ${events.length}`, "#ccccff");
+
+      for (const ev of events) {
+        try {
+          const comp = ev.competitions?.[0];
+          if (!comp) continue;
+
+          // Round / headline: prefer competition.note or event.league?.name or comp.type
+          const roundText =
+            comp.notes?.[0]?.headline ||
+            ev.league?.name ||
+            comp.type?.text ||
+            `Playoffs`;
+
+          const iso = ev.date || comp.date || comp.time || null;
+          if (!iso) continue;
+
+          const competitors = comp.competitors || [];
+          const away = competitors.find(c => c.homeAway === "away");
+          const home = competitors.find(c => c.homeAway === "home");
+          if (!away || !home) continue;
+
+          // Broadcasts: comp.broadcasts or ev.broadcasts
+          let network = "";
+          const broadcasts = comp.broadcasts || ev.broadcasts || [];
+          if (broadcasts.length) {
+            // prefer national network entry
+            const b = broadcasts.find(b => b.market === "national") || broadcasts[0];
+            network = b.names ? b.names.join(", ") : (b.name || "");
+          }
+
+          games.push({
+            league: "NFL",
+            playoff: true,
+            playoffRound: roundText,
+            rawDate: ev.date || comp.date,
+            pst: formatPST(ev.date || comp.date),
+            network: network,
+            score: 1.0,
+            away: { rawName: away.team?.displayName || away.team?.name || away.team?.abbreviation || "" },
+            home: { rawName: home.team?.displayName || home.team?.name || home.team?.abbreviation || "" }
+          });
+        } catch (err) {
+          dbg(`ESPN event parse error: ${err}`, "#ff4444");
+        }
+      }
+    }
+
+    // Deduplicate by ISO + teams (in case multiple weeks return same game)
+    const seen = new Set();
+    const unique = [];
+    for (const g of games) {
+      const key = `${g.rawDate}|${g.away.rawName}|${g.home.rawName}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        unique.push(g);
+      }
+    }
+
+    // Sort by date
+    unique.sort((a, b) => new Date(a.rawDate) - new Date(b.rawDate));
+
+    dbg(`ESPN parsed playoff games: ${unique.length}`, "#00ffff");
     dbgGroupEnd();
-    return games;
-
+    return unique;
   } catch (e) {
-    dbg(`NFL.com FETCH ERROR: ${e}`, "#ff4444");
+    dbg(`ESPN POSTSEASON FETCH ERROR: ${e}`, "#ff4444");
     dbgGroupEnd();
     return [];
   }
