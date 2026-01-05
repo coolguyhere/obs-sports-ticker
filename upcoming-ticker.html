@@ -4,99 +4,107 @@
 <meta charset="UTF-8">
 <title>Top Games This Week</title>
 <style>
-html, body {
-  margin: 0;
-  padding: 0;
-  background: transparent;
-  overflow: hidden;
-  font-family: Arial, Helvetica, sans-serif;
-}
+/* ============================
+   TICKER LAYOUT
+   ============================ */
 
-/* Top bar wrapper */
-.ticker-wrap {
-  position: fixed;
-  top: 0;
+#tickerWrap {
   width: 100%;
-  height: 80px;
-  background: rgba(0,0,0,0.35);
-  display: flex;
-  align-items: center;
   overflow: hidden;
-  transition: opacity 0.8s ease;
+  position: relative;
+  background: #000;
+  padding: 10px 0;
 }
 
-.ticker-wrap.hidden {
+#ticker {
+  white-space: nowrap;
+  display: inline-block;
   opacity: 0;
-  pointer-events: none;
+  font-family: Arial, sans-serif;
+  font-size: 20px;
+  color: #fff;
 }
 
-/* Left label */
+/* Label above ticker */
 .ticker-label {
-  flex: 0 0 auto;
-  padding: 0 18px;
+  font-family: Arial, sans-serif;
   font-size: 22px;
   font-weight: bold;
-  color: #ffffff;
-  text-transform: uppercase;
-  border-right: 2px solid rgba(255,255,255,0.3);
+  color: #fff;
+  margin-bottom: 8px;
 }
 
-/* Scrolling area */
-.ticker {
-  flex: 1 1 auto;
-  white-space: nowrap;
-  padding-left: 100%;
-  font-size: 22px;
-  color: #ffffff;
-  opacity: 0;
-}
+/* ============================
+   GAME PILLS
+   ============================ */
 
-.scroll {
-  animation:
-    fadeIn 1.5s ease forwards,
-    scroll 70s linear forwards,
-    fadeOut 1.5s ease forwards;
-  animation-delay: 0s, 0s, 68.5s;
-}
-
-@keyframes scroll {
-  from { transform: translateX(0); }
-  to   { transform: translateX(-100%); }
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-
-@keyframes fadeOut {
-  from { opacity: 1; }
-  to   { opacity: 0; }
-}
-
-.separator {
-  margin: 0 18px;
-  color: #ffffff;
-}
-
-/* Game pill styling */
 .game-pill {
   display: inline-flex;
   align-items: center;
-  border-radius: 999px;
-  padding: 6px 12px;
+  padding: 6px 14px;
+  margin-right: 18px;
+  border-radius: 8px;
+  color: #fff;
+  font-weight: 600;
+  gap: 10px;
 }
 
+/* Logos inside pills */
 .game-pill img {
   height: 22px;
   width: 22px;
   object-fit: contain;
 }
 
-.game-meta {
-  font-size: 14px;
-  opacity: 0.9;
-  margin-left: 8px;
+/* League color defaults (regular season) */
+.league-NFL { background: #013369; }
+.league-NBA { background: #17408B; }
+.league-NHL { background: #111111; }
+.league-MLB { background: #002D72; }
+
+/* ============================
+   PLAYOFF GRADIENT PILLS
+   ============================ */
+
+.playoff-pill {
+  background: linear-gradient(to right, var(--awayColor), var(--homeColor));
+  border: 1px solid rgba(255,255,255,0.25);
+}
+
+/* ============================
+   ANIMATIONS
+   ============================ */
+
+@keyframes scroll {
+  0% { transform: translateX(100%); }
+  100% { transform: translateX(-100%); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ============================
+   DEBUG PANEL
+   ============================ */
+
+#debugPanel {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 45vh;
+  background: rgba(0,0,0,0.85);
+  color: #00ffea;
+  font-family: Consolas, monospace;
+  font-size: 13px;
+  overflow-y: auto;
+  z-index: 999999;
+  padding: 10px;
+  box-sizing: border-box;
+  white-space: pre-wrap;
+  border-top: 2px solid #00ffea;
 }
 </style>
 </head>
@@ -109,26 +117,11 @@ html, body {
 
 <script>
 // ============================================================
-// DEBUG CONSOLE (BOTTOM 50% PANEL)
+// DEBUG PANEL
 // ============================================================
 
 const debugPanel = document.createElement("div");
 debugPanel.id = "debugPanel";
-debugPanel.style.position = "fixed";
-debugPanel.style.bottom = "0";
-debugPanel.style.left = "0";
-debugPanel.style.width = "100%";
-debugPanel.style.height = "50vh";
-debugPanel.style.background = "rgba(0,0,0,0.85)";
-debugPanel.style.color = "#00ffea";
-debugPanel.style.fontFamily = "Consolas, monospace";
-debugPanel.style.fontSize = "13px";
-debugPanel.style.overflowY = "auto";
-debugPanel.style.zIndex = "999999";
-debugPanel.style.padding = "10px";
-debugPanel.style.boxSizing = "border-box";
-debugPanel.style.whiteSpace = "pre-wrap";
-debugPanel.style.borderTop = "2px solid #00ffea";
 document.body.appendChild(debugPanel);
 
 function dbg(msg, color = "#00ffea") {
@@ -137,7 +130,7 @@ function dbg(msg, color = "#00ffea") {
   line.textContent = msg;
   debugPanel.appendChild(line);
   debugPanel.scrollTop = debugPanel.scrollHeight;
-  console.log(`%c${msg}`, `color:${color}; font-weight:bold`);
+  console.log(`%c${msg}`, `color:${color}`);
 }
 
 function dbgGroup(title) {
@@ -155,7 +148,7 @@ function dbgGroupEnd() {
 
 dbgGroup("CONFIG LOADED");
 
-const PROXY = "https://api.allorigins.win/raw?url=";
+const PROXY = "https://api.codetabs.com/v1/proxy/?quest=";
 
 const leagues = [
   { code: "NFL", sport: "football", league: "nfl" },
@@ -167,8 +160,8 @@ const leagues = [
 const leagueColors = {
   NFL: "#013369",
   NBA: "#17408B",
-  MLB: "#002D72",
-  NHL: "#111111"
+  NHL: "#111111",
+  MLB: "#002D72"
 };
 
 const TOP_N = 5;
@@ -194,8 +187,7 @@ function formatPST(iso) {
       hour: "numeric",
       minute: "2-digit"
     });
-  } catch (e) {
-    dbg(`formatPST error: ${e}`, "#ff4444");
+  } catch {
     return "";
   }
 }
@@ -219,10 +211,88 @@ dbg("Utility functions loaded", "#00ff00");
 dbgGroupEnd();
 
 // ============================================================
-// HYBRID DATA PIPELINE — CBS Playoffs + ESPN Regular Season
+// TEAM DIRECTORY CACHE (LOGOS + COLORS)
 // ============================================================
 
-// 1. CBS PLAYOFF SCRAPER
+const TEAM_CACHE = {
+  NFL: {},
+  NBA: {},
+  NHL: {},
+  MLB: {}
+};
+
+async function loadTeamDirectory(lg) {
+  dbgGroup(`Loading ESPN team directory for ${lg.code}`);
+
+  const url =
+    `https://sports.core.api.espn.com/v2/sports/${lg.sport}/leagues/${lg.league}/teams`;
+
+  try {
+    const res = await fetch(PROXY + encodeURIComponent(url));
+    const data = await res.json();
+
+    if (!data.items) {
+      dbg("No team directory items", "#ffaa00");
+      dbgGroupEnd();
+      return;
+    }
+
+    for (const item of data.items) {
+      try {
+        const tRes = await fetch(PROXY + encodeURIComponent(item.$ref));
+        const tData = await tRes.json();
+
+        const id = tData.id;
+        const name = tData.name?.toLowerCase() || "";
+        const abbr = tData.abbreviation || "";
+        const logo = tData.logos?.[0]?.href || "";
+        const color = tData.color ? `#${tData.color}` : "#444";
+
+        TEAM_CACHE[lg.code][name] = {
+          id,
+          name,
+          abbr,
+          logo,
+          color
+        };
+
+      } catch (e) {
+        dbg(`Error loading team: ${e}`, "#ff4444");
+      }
+    }
+
+    dbg(`Loaded ${Object.keys(TEAM_CACHE[lg.code]).length} teams`, "#00ff00");
+  } catch (e) {
+    dbg(`Team directory fetch error: ${e}`, "#ff4444");
+  }
+
+  dbgGroupEnd();
+}
+
+function normalizeName(name) {
+  return name
+    .toLowerCase()
+    .replace(/city|fc|sc|club|team/gi, "")
+    .replace(/[^a-z\s]/g, "")
+    .trim();
+}
+
+function findTeam(lgCode, rawName) {
+  const norm = normalizeName(rawName);
+  const teams = TEAM_CACHE[lgCode];
+
+  for (const key in teams) {
+    if (key.includes(norm) || norm.includes(key)) {
+      return teams[key];
+    }
+  }
+  return null;
+}
+
+// ============================================================
+// CBS PLAYOFF SCRAPER
+// ============================================================
+
 async function fetchPlayoffGamesFromCBS() {
   dbgGroup("CBS PLAYOFF FETCH");
 
@@ -232,18 +302,22 @@ async function fetchPlayoffGamesFromCBS() {
   try {
     const res = await fetch(PROXY + encodeURIComponent(url));
     const html = await res.text();
-    dbg("CBS HTML fetched OK", "#00ff00");
 
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, "text/html");
 
-    const rows = doc.querySelectorAll("table tr");
+    let rows = doc.querySelectorAll("table tr");
+
+    if (rows.length === 0) {
+      rows = doc.querySelectorAll(".TableBase-body .TableBase-bodyTr");
+    }
+
     dbg(`CBS rows found: ${rows.length}`, "#ccccff");
 
     const games = [];
 
-    rows.forEach((row, idx) => {
-      const cells = row.querySelectorAll("td");
+    rows.forEach(row => {
+      const cells = row.querySelectorAll("td, .TableBase-bodyTd");
       if (cells.length < 3) return;
 
       const dateText = cells[0].textContent.trim();
@@ -252,10 +326,7 @@ async function fetchPlayoffGamesFromCBS() {
 
       if (!matchupText.includes("at") && !matchupText.includes("@")) return;
 
-      dbg(`CBS row ${idx}: ${dateText} | ${timeText} | ${matchupText}`, "#ccccff");
-
       let [awayName, homeName] = matchupText.split(/at|@/i).map(s => s.trim());
-      if (!awayName || !homeName) return;
 
       const rawString = `${dateText} ${timeText} PST`;
       const rawDate = new Date(rawString);
@@ -268,8 +339,8 @@ async function fetchPlayoffGamesFromCBS() {
         rawDate: iso,
         pst: formatPST(iso),
         score: 1.0,
-        away: { team: { abbreviation: awayName, logo: null }, record: null },
-        home: { team: { abbreviation: homeName, logo: null }, record: null }
+        away: { rawName: awayName },
+        home: { rawName: homeName }
       });
     });
 
@@ -284,7 +355,71 @@ async function fetchPlayoffGamesFromCBS() {
   }
 }
 
-// 2. ESPN REGULAR SEASON FETCH
+// ============================================================
+// SPORTING NEWS FALLBACK
+// ============================================================
+
+async function fetchPlayoffsFromSportingNews() {
+  dbgGroup("SPORTING NEWS FALLBACK");
+
+  const url = "https://www.sportingnews.com/us/nfl/schedule";
+  dbg(`SN URL: ${url}`, "#4da6ff");
+
+  try {
+    const res = await fetch(PROXY + encodeURIComponent(url));
+    const html = await res.text();
+
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, "text/html");
+
+    const rows = doc.querySelectorAll("table tr");
+    dbg(`SN rows found: ${rows.length}`, "#ccccff");
+
+    const games = [];
+
+    rows.forEach(row => {
+      const cells = row.querySelectorAll("td");
+      if (cells.length < 3) return;
+
+      const dateText = cells[0].textContent.trim();
+      const matchupText = cells[1].textContent.trim();
+      const timeText = cells[2].textContent.trim();
+
+      if (!matchupText.includes("at") && !matchupText.includes("@")) return;
+
+      let [awayName, homeName] = matchupText.split(/at|@/i).map(s => s.trim());
+
+      const rawString = `${dateText} ${timeText} PST`;
+      const rawDate = new Date(rawString);
+      const iso = rawDate.toISOString();
+
+      games.push({
+        league: "NFL",
+        playoff: true,
+        playoffRound: "Playoffs",
+        rawDate: iso,
+        pst: formatPST(iso),
+        score: 1.0,
+        away: { rawName: awayName },
+        home: { rawName: homeName }
+      });
+    });
+
+    dbg(`SN parsed playoff games: ${games.length}`, "#ff66ff");
+    dbgGroupEnd();
+    return games;
+
+  } catch (e) {
+    dbg(`SN ERROR: ${e}`, "#ff4444");
+    dbgGroupEnd();
+    return [];
+  }
+}
+
+// ============================================================
+// ESPN REGULAR SEASON FETCH
+// ============================================================
+
 async function fetchRegularGamesFromESPN() {
   dbgGroup("ESPN REGULAR FETCH");
 
@@ -324,53 +459,26 @@ async function fetchRegularGamesFromESPN() {
       continue;
     }
 
-    dbg(`ESPN items: ${scheduleData.items.length}`, "#ccccff");
-
     for (const item of scheduleData.items) {
-      dbgGroup(`ESPN Event: ${item.$ref}`);
-
       let ev;
       try {
         const evRes = await fetch(PROXY + encodeURIComponent(item.$ref));
         ev = await evRes.json();
-        dbg("Event OK", "#00ff00");
-      } catch (e) {
-        dbg(`Event ERROR: ${e}`, "#ff4444");
-        dbgGroupEnd();
+      } catch {
         continue;
       }
 
       const comp = ev.competitions?.[0];
-      if (!comp) {
-        dbg("No competition", "#ffaa00");
-        dbgGroupEnd();
-        continue;
-      }
+      if (!comp) continue;
 
       const seasonType = comp.season?.type;
-      dbg(`SeasonType = ${seasonType}`, "#ccccff");
-
-      if (![2, 3, 4].includes(seasonType)) {
-        dbg("Filtered out", "#ffaa00");
-        dbgGroupEnd();
-        continue;
-      }
+      if (![2, 3, 4].includes(seasonType)) continue;
 
       const teams = comp.competitors || [];
       const away = teams.find(t => t.homeAway === "away");
       const home = teams.find(t => t.homeAway === "home");
 
-      if (!away || !home) {
-        dbg("Missing teams", "#ff4444");
-        dbgGroupEnd();
-        continue;
-      }
-
-      const awayRec = null;
-      const homeRec = null;
-
-      away.record = awayRec;
-      home.record = homeRec;
+      if (!away || !home) continue;
 
       const aPct = winPct(away);
       const hPct = winPct(home);
@@ -378,16 +486,20 @@ async function fetchRegularGamesFromESPN() {
 
       allGames.push({
         league: lg.code,
-        away,
-        home,
+        away: {
+          rawName: away.team?.displayName || "",
+          id: away.id
+        },
+        home: {
+          rawName: home.team?.displayName || "",
+          id: home.id
+        },
         score,
         rawDate: ev.date,
         pst: formatPST(ev.date),
         playoff: seasonType >= 3,
         playoffRound: comp.notes?.[0]?.headline || "Playoffs"
       });
-
-      dbgGroupEnd();
     }
 
     dbgGroupEnd();
@@ -398,23 +510,54 @@ async function fetchRegularGamesFromESPN() {
   return allGames;
 }
 
-// 3. HYBRID MERGE
+// ============================================================
+// HYBRID MERGE + LOGO MAPPING + COLOR MAPPING
+// ============================================================
+
 async function fetchHybridGames() {
   dbgGroup("HYBRID FETCH START");
 
-  const [cbsPlayoffs, espnGames] = await Promise.all([
+  // Load team directories first
+  for (const lg of leagues) {
+    await loadTeamDirectory(lg);
+  }
+
+  const [cbsPlayoffs, snPlayoffs, espnGames] = await Promise.all([
     fetchPlayoffGamesFromCBS(),
+    fetchPlayoffsFromSportingNews(),
     fetchRegularGamesFromESPN()
   ]);
 
+  let playoffGames = cbsPlayoffs.length ? cbsPlayoffs : snPlayoffs;
+
   dbg(`CBS playoff count: ${cbsPlayoffs.length}`, "#ff66ff");
+  dbg(`SN playoff count: ${snPlayoffs.length}`, "#ff66ff");
   dbg(`ESPN total count: ${espnGames.length}`, "#66ff66");
 
-  const playoffGames = cbsPlayoffs.length
-    ? cbsPlayoffs
-    : espnGames.filter(g => g.playoff);
+  // Attach logos + colors
+  function enrich(game) {
+    const lg = game.league;
 
-  const regularGames = espnGames.filter(g => !g.playoff);
+    const awayTeam = findTeam(lg, game.away.rawName);
+    const homeTeam = findTeam(lg, game.home.rawName);
+
+    game.away.team = {
+      abbreviation: awayTeam?.abbr || game.away.rawName.slice(0, 3).toUpperCase(),
+      logo: awayTeam?.logo || "",
+      color: awayTeam?.color || "#444"
+    };
+
+    game.home.team = {
+      abbreviation: homeTeam?.abbr || game.home.rawName.slice(0, 3).toUpperCase(),
+      logo: homeTeam?.logo || "",
+      color: homeTeam?.color || "#444"
+    };
+
+    return game;
+  }
+
+  playoffGames = playoffGames.map(enrich);
+  const regularGames = espnGames.map(enrich);
 
   playoffGames.sort((a, b) => new Date(a.rawDate) - new Date(b.rawDate));
   regularGames.sort((a, b) => b.score - a.score);
@@ -428,31 +571,35 @@ async function fetchHybridGames() {
 }
 
 // ============================================================
-// RENDERING + ANIMATION
+// RENDERING
 // ============================================================
-
-dbgGroup("CHUNK 3 LOADED — Rendering + Animation");
 
 function buildHTML(games) {
   dbgGroup("BUILDING HTML FOR GAMES");
-  dbg(`Games received: ${games.length}`, "#00ffff");
 
-  const html = games.map((g, i) => {
-    dbg(`Game ${i + 1}: ${g.away.team.abbreviation} vs ${g.home.team.abbreviation}`, "#ccccff");
+  const html = games.map(g => {
+    const isPlayoff = g.playoff;
 
-    const lc = leagueColors[g.league] || "#222";
+    const pillClass = isPlayoff
+      ? "game-pill playoff-pill"
+      : `game-pill league-${g.league}`;
+
+    const style = isPlayoff
+      ? `style="--awayColor:${g.away.team.color}; --homeColor:${g.home.team.color};"`
+      : "";
 
     return `
-      <span class="game-pill" style="background:${lc}; padding:6px 12px; margin-right:12px; border-radius:6px; display:inline-flex; align-items:center;">
+      <span class="${pillClass}" ${style}>
+        <img src="${g.away.team.logo}" />
         ${g.away.team.abbreviation}
         <span style="margin:0 8px;">vs</span>
         ${g.home.team.abbreviation}
+        <img src="${g.home.team.logo}" />
         <span style="margin-left:12px; opacity:0.8;">${g.pst}</span>
       </span>
     `;
   }).join("");
 
-  dbg("HTML build complete", "#00ff00");
   dbgGroupEnd();
   return html;
 }
@@ -461,29 +608,19 @@ function startLoop() {
   dbgGroup("STARTING SCROLL LOOP");
 
   const ticker = document.getElementById("ticker");
-  if (!ticker) {
-    dbg("ERROR: #ticker not found", "#ff4444");
-    dbgGroupEnd();
-    return;
-  }
-
   ticker.style.animation = "none";
   ticker.style.opacity = "0";
 
   void ticker.offsetWidth;
 
   const scrollSeconds = SCROLL_DURATION / 1000;
-  dbg(`Scroll duration: ${scrollSeconds}s`, "#ccccff");
 
   ticker.style.animation =
     `fadeIn 0.4s ease forwards, scroll ${scrollSeconds}s linear forwards`;
 
-  dbg("Scroll animation applied", "#00ff00");
-
   if (window.loopTimeout) clearTimeout(window.loopTimeout);
 
   window.loopTimeout = setTimeout(() => {
-    dbg("Loop timeout reached — restarting loop", "#ffaa00");
     startLoop();
   }, SCROLL_DURATION + LOOP_PAUSE);
 
@@ -496,17 +633,7 @@ function render(games, isRefresh = false) {
   const wrap = document.getElementById("tickerWrap");
   const ticker = document.getElementById("ticker");
 
-  if (!wrap || !ticker) {
-    dbg("ERROR: tickerWrap or ticker missing", "#ff4444");
-    dbgGroupEnd();
-    return;
-  }
-
-  dbg(`Rendering ${games.length} games`, "#00ffff");
-
   if (!games.length) {
-    dbg("NO GAMES FOUND — showing fallback message", "#ffaa00");
-    wrap.classList.remove("hidden");
     ticker.innerHTML = "No upcoming games found.";
     ticker.style.opacity = "1";
     ticker.style.animation = "none";
@@ -517,25 +644,19 @@ function render(games, isRefresh = false) {
   const newHTML = buildHTML(games);
 
   if (isRefresh) {
-    dbg("Crossfade refresh triggered", "#ff66ff");
     wrap.classList.add("hidden");
-
     setTimeout(() => {
       ticker.innerHTML = newHTML;
       wrap.classList.remove("hidden");
       startLoop();
     }, 800);
   } else {
-    dbg("Initial render", "#00ff00");
-    wrap.classList.remove("hidden");
     ticker.innerHTML = newHTML;
     startLoop();
   }
 
   dbgGroupEnd();
 }
-
-dbgGroupEnd();
 
 // ============================================================
 // INIT + MAIN LOOP
@@ -547,11 +668,7 @@ async function run(isRefresh = false) {
   dbgGroup(`RUN() CALLED — isRefresh=${isRefresh}`);
 
   try {
-    dbg("Calling fetchHybridGames()…", "#4da6ff");
     const games = await fetchHybridGames();
-
-    dbg(`fetchHybridGames() returned ${games.length} games`, "#00ffff");
-
     render(games, isRefresh);
   } catch (e) {
     dbg(`ERROR in run(): ${e}`, "#ff4444");
@@ -563,24 +680,18 @@ async function run(isRefresh = false) {
 function init() {
   dbgGroup("INIT() CALLED");
 
-  dbg("Running initial fetch…", "#4da6ff");
   run(false);
-
-  dbg(`Setting refresh interval: ${REFRESH_INTERVAL / 60000} minutes`, "#ccccff");
 
   if (window.refreshIntervalId) clearInterval(window.refreshIntervalId);
 
   window.refreshIntervalId = setInterval(() => {
-    dbg("Refresh interval reached — running refresh", "#ffaa00");
     run(true);
   }, REFRESH_INTERVAL);
 
   dbgGroupEnd();
 }
 
-dbg("Calling init() to start ticker…", "#00ff00");
 init();
-
 dbgGroupEnd();
 </script>
 </body>
