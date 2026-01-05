@@ -581,94 +581,129 @@ function getNFLSeasonYear() {
 // ============================================================
 // ESPN SCOREBOARD POSTSEASON SCRAPER (REPLACES NFL.com POSTSEASON)
 // ============================================================
+// Resilient ESPN postseason fetch that tries multiple query shapes
 async function fetchAllNFLPlayoffs() {
-  dbgGroup("ESPN POSTSEASON FETCH (used as NFL playoff source)");
+  dbgGroup("ESPN POSTSEASON FETCH (resilient)");
 
   const seasonYear = getNFLSeasonYear();
+  const trySeasons = [seasonYear, seasonYear + 1];
   const games = [];
 
   try {
-    // ESPN uses seasontype=3 for postseason. We'll iterate week=1..6 to be safe.
-    // (Some seasons use 1..4; 6 is a safe upper bound for any playoff structure.)
-    for (let week = 1; week <= 6; week++) {
-      const url = `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?seasontype=3&season=${seasonYear}&week=${week}`;
-      dbg(`ESPN postseason URL (week ${week}): ${url}`, "#4da6ff");
+    // 1) Try no-week query for each candidate season
+    for (const s of trySeasons) {
+      const url = `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?seasontype=3&season=${s}`;
+      dbg(`ESPN postseason URL (no week) season ${s}: ${url}`, "#4da6ff");
 
-      let res, data;
       try {
-        res = await fetch(PROXY + encodeURIComponent(url));
-        data = await res.json();
-      } catch (e) {
-        dbg(`ESPN fetch error (week ${week}): ${e}`, "#ff4444");
-        continue;
-      }
+        const res = await fetch(PROXY + encodeURIComponent(url));
+        const data = await res.json();
+        dbg(`ESPN events found (no week, season ${s}): ${data.events?.length || 0}`, "#ccccff");
 
-      const events = data.events || [];
-      dbg(`ESPN events found (week ${week}): ${events.length}`, "#ccccff");
-
-      for (const ev of events) {
-        try {
-          const comp = ev.competitions?.[0];
-          if (!comp) continue;
-
-          // Round / headline: prefer competition.note or event.league?.name or comp.type
-          const roundText =
-            comp.notes?.[0]?.headline ||
-            ev.league?.name ||
-            comp.type?.text ||
-            `Playoffs`;
-
-          const iso = ev.date || comp.date || comp.time || null;
-          if (!iso) continue;
-
-          const competitors = comp.competitors || [];
-          const away = competitors.find(c => c.homeAway === "away");
-          const home = competitors.find(c => c.homeAway === "home");
-          if (!away || !home) continue;
-
-          // Broadcasts: comp.broadcasts or ev.broadcasts
-          let network = "";
-          const broadcasts = comp.broadcasts || ev.broadcasts || [];
-          if (broadcasts.length) {
-            // prefer national network entry
-            const b = broadcasts.find(b => b.market === "national") || broadcasts[0];
-            network = b.names ? b.names.join(", ") : (b.name || "");
+        if (data.events?.length) {
+          // parse and return immediately
+          for (const ev of data.events) {
+            try {
+              const comp = ev.competitions?.[0];
+              if (!comp) continue;
+              const roundText = comp.notes?.[0]?.headline || ev.league?.name || comp.type?.text || "Playoffs";
+              const competitors = comp.competitors || [];
+              const away = competitors.find(c => c.homeAway === "away");
+              const home = competitors.find(c => c.homeAway === "home");
+              if (!away || !home) continue;
+              const broadcasts = comp.broadcasts || ev.broadcasts || [];
+              const b = broadcasts.find(b => b.market === "national") || broadcasts[0] || {};
+              const network = b.names ? b.names.join(", ") : (b.name || "");
+              games.push({
+                league: "NFL",
+                playoff: true,
+                playoffRound: roundText,
+                rawDate: ev.date || comp.date,
+                pst: formatPST(ev.date || comp.date),
+                network,
+                score: 1.0,
+                away: { rawName: away.team?.displayName || away.team?.name || "" },
+                home: { rawName: home.team?.displayName || home.team?.name || "" }
+              });
+            } catch (err) {
+              dbg(`ESPN parse error (no week): ${err}`, "#ff4444");
+            }
           }
 
-          games.push({
-            league: "NFL",
-            playoff: true,
-            playoffRound: roundText,
-            rawDate: ev.date || comp.date,
-            pst: formatPST(ev.date || comp.date),
-            network: network,
-            score: 1.0,
-            away: { rawName: away.team?.displayName || away.team?.name || away.team?.abbreviation || "" },
-            home: { rawName: home.team?.displayName || home.team?.name || home.team?.abbreviation || "" }
-          });
-        } catch (err) {
-          dbg(`ESPN event parse error: ${err}`, "#ff4444");
+          dbg(`ESPN parsed playoff games (no week, season ${s}): ${games.length}`, "#00ffff");
+          dbgGroupEnd();
+          return games;
+        }
+      } catch (e) {
+        dbg(`ESPN fetch error (no week, season ${s}): ${e}`, "#ff4444");
+      }
+    }
+
+    // 2) If no-week returned nothing, try week=1..6 for each season
+    for (const s of trySeasons) {
+      for (let week = 1; week <= 6; week++) {
+        const url = `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?seasontype=3&season=${s}&week=${week}`;
+        dbg(`ESPN postseason URL (week ${week}, season ${s}): ${url}`, "#4da6ff");
+
+        try {
+          const res = await fetch(PROXY + encodeURIComponent(url));
+          const data = await res.json();
+          dbg(`ESPN events found (week ${week}, season ${s}): ${data.events?.length || 0}`, "#ccccff");
+
+          if (data.events?.length) {
+            for (const ev of data.events) {
+              try {
+                const comp = ev.competitions?.[0];
+                if (!comp) continue;
+                const roundText = comp.notes?.[0]?.headline || ev.league?.name || comp.type?.text || "Playoffs";
+                const competitors = comp.competitors || [];
+                const away = competitors.find(c => c.homeAway === "away");
+                const home = competitors.find(c => c.homeAway === "home");
+                if (!away || !home) continue;
+                const broadcasts = comp.broadcasts || ev.broadcasts || [];
+                const b = broadcasts.find(b => b.market === "national") || broadcasts[0] || {};
+                const network = b.names ? b.names.join(", ") : (b.name || "");
+                games.push({
+                  league: "NFL",
+                  playoff: true,
+                  playoffRound: roundText,
+                  rawDate: ev.date || comp.date,
+                  pst: formatPST(ev.date || comp.date),
+                  network,
+                  score: 1.0,
+                  away: { rawName: away.team?.displayName || away.team?.name || "" },
+                  home: { rawName: home.team?.displayName || home.team?.name || "" }
+                });
+              } catch (err) {
+                dbg(`ESPN parse error (week ${week}): ${err}`, "#ff4444");
+              }
+            }
+
+            // dedupe + sort then return
+            const seen = new Set();
+            const unique = [];
+            for (const g of games) {
+              const key = `${g.rawDate}|${g.away.rawName}|${g.home.rawName}`;
+              if (!seen.has(key)) {
+                seen.add(key);
+                unique.push(g);
+              }
+            }
+            unique.sort((a, b) => new Date(a.rawDate) - new Date(b.rawDate));
+            dbg(`ESPN parsed playoff games (week ${week}, season ${s}): ${unique.length}`, "#00ffff");
+            dbgGroupEnd();
+            return unique;
+          }
+        } catch (e) {
+          dbg(`ESPN fetch error (week ${week}, season ${s}): ${e}`, "#ff4444");
         }
       }
     }
 
-    // Deduplicate by ISO + teams (in case multiple weeks return same game)
-    const seen = new Set();
-    const unique = [];
-    for (const g of games) {
-      const key = `${g.rawDate}|${g.away.rawName}|${g.home.rawName}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        unique.push(g);
-      }
-    }
-
-    // Sort by date
-    unique.sort((a, b) => new Date(a.rawDate) - new Date(b.rawDate));
-
-    dbg(`ESPN parsed playoff games: ${unique.length}`, "#00ffff");
+    // 3) Nothing found on ESPN. Return empty so hybrid falls back to CBS/SN
+    dbg("ESPN returned no postseason events after all attempts", "#ffaa00");
     dbgGroupEnd();
-    return unique;
+    return [];
   } catch (e) {
     dbg(`ESPN POSTSEASON FETCH ERROR: ${e}`, "#ff4444");
     dbgGroupEnd();
