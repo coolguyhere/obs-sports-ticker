@@ -22,6 +22,12 @@ html, body {
   display: flex;
   align-items: center;
   overflow: hidden;
+  transition: opacity 0.8s ease;
+}
+
+.ticker-wrap.hidden {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .ticker {
@@ -62,12 +68,13 @@ html, body {
 
 .separator {
   margin: 0 18px;
+  color: white;
 }
 </style>
 </head>
 
 <body>
-<div class="ticker-wrap">
+<div class="ticker-wrap" id="tickerWrap">
   <div class="ticker" id="ticker">Loading today’s scores…</div>
 </div>
 
@@ -79,7 +86,14 @@ const leagues = [
   { name: "NHL", url: "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard" }
 ];
 
-const PAUSE_BETWEEN_LOOPS = 3000; // 3 seconds
+const leagueColors = {
+  NFL: "#013369",
+  NBA: "#17408B",
+  MLB: "#002D72",
+  NHL: "#111111"
+};
+
+const PAUSE_BETWEEN_LOOPS = 3000;
 
 async function fetchScores() {
   const segments = [];
@@ -93,7 +107,7 @@ async function fetchScores() {
       const res = await fetch(proxyUrl);
       const data = await res.json();
 
-      // 🔥 Only regular season (2) + playoffs (3)
+      // Regular season (2) + Playoffs (3)
       const events = (data.events || []).filter(
         e => e.season?.type === 2 || e.season?.type === 3
       );
@@ -107,12 +121,18 @@ async function fetchScores() {
         const isLive = status.state === "in";
         const statusText = isLive ? "LIVE" : status.shortDetail;
 
-        segments.push(
-          `<span class="${isLive ? 'live' : ''}">
-            ${league.name}: ${away.team.abbreviation} ${away.score} – ${home.score} ${home.team.abbreviation}
-            (${statusText})
-          </span>`
-        );
+        const color = leagueColors[league.name] || "#222";
+
+        segments.push(`
+          <span style="background:${color}; padding: 6px 12px; border-radius: 6px;">
+            <img src="${away.team.logo}" style="height:22px; vertical-align:middle; margin-right:6px;">
+            ${away.team.abbreviation} ${away.score}
+            –
+            ${home.score} ${home.team.abbreviation}
+            <img src="${home.team.logo}" style="height:22px; vertical-align:middle; margin-left:6px;">
+            <span class="${isLive ? 'live' : ''}">(${statusText})</span>
+          </span>
+        `);
       });
 
     } catch (err) {
@@ -120,25 +140,33 @@ async function fetchScores() {
     }
   }
 
+  const tickerWrap = document.getElementById("tickerWrap");
+
+  if (segments.length === 0) {
+    tickerWrap.classList.add("hidden");
+  } else {
+    tickerWrap.classList.remove("hidden");
+  }
+
   startTicker(
     segments.length
       ? segments.join('<span class="separator">|</span>')
-      : "No games today."
+      : ""
   );
 }
 
 function startTicker(content) {
   const ticker = document.getElementById("ticker");
 
-  ticker.className = "ticker"; // reset
+  ticker.className = "ticker";
   ticker.innerHTML = content;
 
-  // Force reflow to restart animation
   void ticker.offsetWidth;
 
-  ticker.classList.add("scroll");
+  if (content !== "") {
+    ticker.classList.add("scroll");
+  }
 
-  // Restart after full cycle + pause
   setTimeout(fetchScores, 70000 + PAUSE_BETWEEN_LOOPS);
 }
 
