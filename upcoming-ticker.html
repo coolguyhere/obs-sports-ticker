@@ -181,12 +181,23 @@ dbgGroup("UTILITY FUNCTIONS LOADED");
 function formatPST(iso) {
   try {
     const d = new Date(iso);
-    return d.toLocaleString("en-US", {
+
+    // Convert to PST parts using toLocaleString
+    const pstString = d.toLocaleString("en-US", {
       timeZone: "America/Los_Angeles",
-      weekday: "short",
+      month: "numeric",   // 1–12, no leading zero
+      day: "numeric",     // 1–31, no leading zero
       hour: "numeric",
-      minute: "2-digit"
+      minute: "2-digit",
+      hour12: true
     });
+
+    // pstString will look like "1/12/2025, 1:15 PM"
+    const [datePart, timePart] = pstString.split(", ");
+    const [month, day] = datePart.split("/");
+
+    // Return "M/D h:mm AM/PM"
+    return `${Number(month)}/${Number(day)} ${timePart}`;
   } catch {
     return "";
   }
@@ -207,9 +218,19 @@ function anticipation(a, b) {
   return (a + b) / 2 - Math.abs(a - b);
 }
 
+// Helper: is this a special event (playoff / tournament / final)?
+function isSpecialEvent(game) {
+  const stage = (game.stage || game.playoffRound || "").toLowerCase();
+
+  return (
+    game.playoff === true ||
+    game.tournament === true ||
+    /round|final|playoff|cup|bowl|championship/.test(stage)
+  );
+}
+
 dbg("Utility functions loaded", "#00ff00");
 dbgGroupEnd();
-
 // ============================================================
 // TEAM DIRECTORY CACHE (LOGOS + COLORS)
 // ============================================================
@@ -509,30 +530,165 @@ async function fetchRegularGamesFromESPN() {
   dbgGroupEnd();
   return allGames;
 }
-
 // ============================================================
-// HYBRID MERGE + LOGO MAPPING + COLOR MAPPING
+// NFL.COM PLAYOFF FETCH (ALL ROUNDS POST-1 → POST-4)
+// ============================================================
+
+// Determine NFL season year dynamically
+// Jan–Feb → last season, Mar–Dec → current year
+function getNFLSeasonYear() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  return month <= 2 ? year - 1 : year;
+}
+
+async function fetchPlayoffsFromNFLWeek(weekNumber) {
+  dbgGroup(`NFL.COM PLAYOFF FETCH — WEEK post-${weekNumber}`);
+
+  const seasonYear = getNFLSeasonYear();
+  const url = `https://www.nfl.com/schedules/${seasonYear}/by-week/post-${weekNumber}`;
+  dbg(`NFL.com URL: ${url}`, "#4da6ff");
+
+  try {
+    const res = await fetch(PROXY + encodeURIComponent(url));
+    const html = await res.text();
+
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, "text/html");
+
+    // Each matchup strip = one game
+    const strips = doc.querySelectorAll(".nfl-c-matchup-strip");
+    dbg(`NFL.com matchup strips found: ${strips.length}`, "#ccccff");
+
+    const games = [];
+
+    strips.forEach(strip => {
+      try {
+        const teamEls = strip.querySelectorAll(".nfl-c-matchup-strip__team-fullname");
+        if (teamEls.length < 2) return;
+
+        const awayName = teamEls[0].textContent.trim();
+        const homeName = teamEls[1].textContent.trim();
+
+        const dateEl = strip.querySelector(".nfl-c-matchup-strip__date");
+        const timeEl = strip.querySelector(".nfl-c-matchup-strip__time");
+        const networkEl = strip.querySelector(".nfl-c-matchup-strip__network");
+
+        const dateText = dateEl ? dateEl.textContent.trim() : "";
+        const timeText = timeEl ? timeEl.textContent.trim() : "";
+        const networkText = networkEl ? networkEl.textContent.trim() : "";
+
+        if (!dateText || !timeText) return;
+
+        // dateText example: "Sun, Jan 12"
+        // Build a parseable string with season-year + ET
+        const seasonYearStr = String(getNFLSeasonYear());
+        const rawString = `${dateText} ${seasonYearStr} ${timeText} ET`;
+
+        const rawDate = new Date(rawString);
+        const iso = rawDate.toISOString();
+
+        // Map week → round label
+        let roundLabel = "";
+        switch (weekNumber) {
+          case 1:
+            roundLabel = "Wild Card";
+            break;
+          case 2:
+            roundLabel = "Divisional";
+            break;
+          case 3:
+            roundLabel = "Conference Championship";
+            break;
+          case 4:
+            roundLabel = "Super Bowl";
+            break;
+          default:
+            roundLabel = "Playoffs";
+        }
+
+        games.push({
+          league: "NFL",
+          playoff: true,
+          playoffRound: roundLabel,
+          rawDate: iso,
+          pst: formatPST(iso),        // will be "M/D h:mm AM/PM"
+          network: networkText,       // e.g., "CBS"
+          score: 1.0,                 // high priority
+          away: { rawName: awayName },
+          home: { rawName: homeName }
+        });
+      } catch (err) {
+        dbg(`NFL.com strip parse error: ${err}`, "#ff4444");
+      }
+    });
+
+    dbg(`NFL.com parsed playoff games (post-${weekNumber}): ${games.length}`, "#ff66ff");
+    dbgGroupEnd();
+    return games;
+
+  } catch (e) {
+    dbg(`NFL.com FETCH ERROR (post-${weekNumber}): ${e}`, "#ff4444");
+    dbgGroupEnd();
+    return [];
+  }
+}
+
+async function fetchAllNFLPlayoffs() {
+  dbgGroup("NFL.COM ALL PLAYOFF ROUNDS");
+
+  // post-1 → Wild Card, post-2 → Divisional, post-3 → Conf Champ, post-4 → SB
+  const results = await Promise.all([
+    fetchPlayoffsFromNFLWeek(1),
+    fetchPlayoffsFromNFLWeek(2),
+    fetchPlayoffsFromNFLWeek(3),
+    fetchPlayoffsFromNFLWeek(4)
+  ]);
+
+  const allGames = results.flat();
+  allGames.sort((a, b) => new Date(a.rawDate) - new Date(b.rawDate));
+
+  dbg(`NFL.com total playoff games: ${allGames.length}`, "#00ffff");
+  dbgGroupEnd();
+
+  return allGames;
+}
+// ============================================================
+// HYBRID MERGE — NFL.com → CBS → SN → ESPN
 // ============================================================
 
 async function fetchHybridGames() {
   dbgGroup("HYBRID FETCH START");
 
-  // Load team directories first
+  // Load ESPN team directories first (logos + colors)
   for (const lg of leagues) {
     await loadTeamDirectory(lg);
   }
 
-  const [cbsPlayoffs, snPlayoffs, espnGames] = await Promise.all([
+  // Fetch all sources in parallel
+  const [
+    nflPlayoffs,
+    cbsPlayoffs,
+    snPlayoffs,
+    espnGames
+  ] = await Promise.all([
+    fetchAllNFLPlayoffs(),          // NEW TOP PRIORITY
     fetchPlayoffGamesFromCBS(),
     fetchPlayoffsFromSportingNews(),
     fetchRegularGamesFromESPN()
   ]);
 
-  let playoffGames = cbsPlayoffs.length ? cbsPlayoffs : snPlayoffs;
-
+  dbg(`NFL.com playoff count: ${nflPlayoffs.length}`, "#66ffff");
   dbg(`CBS playoff count: ${cbsPlayoffs.length}`, "#ff66ff");
   dbg(`SN playoff count: ${snPlayoffs.length}`, "#ff66ff");
   dbg(`ESPN total count: ${espnGames.length}`, "#66ff66");
+
+  // Determine playoff source priority
+  let playoffGames = [];
+  if (nflPlayoffs.length) playoffGames = nflPlayoffs;
+  else if (cbsPlayoffs.length) playoffGames = cbsPlayoffs;
+  else if (snPlayoffs.length) playoffGames = snPlayoffs;
 
   // Attach logos + colors
   function enrich(game) {
@@ -559,7 +715,10 @@ async function fetchHybridGames() {
   playoffGames = playoffGames.map(enrich);
   const regularGames = espnGames.map(enrich);
 
+  // Sort playoff games by date
   playoffGames.sort((a, b) => new Date(a.rawDate) - new Date(b.rawDate));
+
+  // Sort regular season by anticipation score
   regularGames.sort((a, b) => b.score - a.score);
 
   const combined = [...playoffGames, ...regularGames];
@@ -571,22 +730,26 @@ async function fetchHybridGames() {
 }
 
 // ============================================================
-// RENDERING
+// RENDERING — SPECIAL EVENT GRADIENT PILLS
 // ============================================================
 
 function buildHTML(games) {
   dbgGroup("BUILDING HTML FOR GAMES");
 
   const html = games.map(g => {
-    const isPlayoff = g.playoff;
+    const special = isSpecialEvent(g);
 
-    const pillClass = isPlayoff
+    const pillClass = special
       ? "game-pill playoff-pill"
       : `game-pill league-${g.league}`;
 
-    const style = isPlayoff
+    const style = special
       ? `style="--awayColor:${g.away.team.color}; --homeColor:${g.home.team.color};"`
       : "";
+
+    // Build the time + network string
+    let timeString = g.pst; // already "M/D h:mm AM/PM"
+    if (g.network) timeString += ` • ${g.network}`;
 
     return `
       <span class="${pillClass}" ${style}>
@@ -595,67 +758,13 @@ function buildHTML(games) {
         <span style="margin:0 8px;">vs</span>
         ${g.home.team.abbreviation}
         <img src="${g.home.team.logo}" />
-        <span style="margin-left:12px; opacity:0.8;">${g.pst}</span>
+        <span style="margin-left:12px; opacity:0.85;">• ${timeString}</span>
       </span>
     `;
   }).join("");
 
   dbgGroupEnd();
   return html;
-}
-
-function startLoop() {
-  dbgGroup("STARTING SCROLL LOOP");
-
-  const ticker = document.getElementById("ticker");
-  ticker.style.animation = "none";
-  ticker.style.opacity = "0";
-
-  void ticker.offsetWidth;
-
-  const scrollSeconds = SCROLL_DURATION / 1000;
-
-  ticker.style.animation =
-    `fadeIn 0.4s ease forwards, scroll ${scrollSeconds}s linear forwards`;
-
-  if (window.loopTimeout) clearTimeout(window.loopTimeout);
-
-  window.loopTimeout = setTimeout(() => {
-    startLoop();
-  }, SCROLL_DURATION + LOOP_PAUSE);
-
-  dbgGroupEnd();
-}
-
-function render(games, isRefresh = false) {
-  dbgGroup("RENDER() CALLED");
-
-  const wrap = document.getElementById("tickerWrap");
-  const ticker = document.getElementById("ticker");
-
-  if (!games.length) {
-    ticker.innerHTML = "No upcoming games found.";
-    ticker.style.opacity = "1";
-    ticker.style.animation = "none";
-    dbgGroupEnd();
-    return;
-  }
-
-  const newHTML = buildHTML(games);
-
-  if (isRefresh) {
-    wrap.classList.add("hidden");
-    setTimeout(() => {
-      ticker.innerHTML = newHTML;
-      wrap.classList.remove("hidden");
-      startLoop();
-    }, 800);
-  } else {
-    ticker.innerHTML = newHTML;
-    startLoop();
-  }
-
-  dbgGroupEnd();
 }
 
 // ============================================================
