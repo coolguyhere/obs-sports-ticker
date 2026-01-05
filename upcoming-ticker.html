@@ -601,7 +601,7 @@ async function run(isRefresh = false) {
 
   try {
     dbg("Calling fetchScheduleGames()…", "#4da6ff");
-    const games = await fetchScheduleGames();
+    const games = await fetchHybridGames();
 
     dbg(`fetchScheduleGames() returned ${games.length} games`, "#00ffff");
 
