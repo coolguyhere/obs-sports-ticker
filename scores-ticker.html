@@ -60,7 +60,7 @@ async function fetchScores() {
     try {
       const res = await fetch(league.url);
       const data = await res.json();
-      const events = data.content.scoreboard.evts || [];
+      const events = data.content?.scoreboard?.events || [];
 
       events.forEach(evt => {
         const comp = evt.competitions[0];
@@ -86,3 +86,4 @@ setInterval(fetchScores, 90000);
 </script>
 </body>
 </html>
+
