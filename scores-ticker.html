@@ -75,7 +75,7 @@ html, body {
 const leagues = [
   { name: "NFL", url: "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard" },
   { name: "NBA", url: "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard" },
-  // { name: "MLB", url: "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard" },
+  { name: "MLB", url: "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard" },
   { name: "NHL", url: "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard" }
 ];
 
@@ -92,7 +92,11 @@ async function fetchScores() {
 
       const res = await fetch(proxyUrl);
       const data = await res.json();
-      const events = data.events || [];
+
+      // 🔥 Only regular season (2) + playoffs (3)
+      const events = (data.events || []).filter(
+        e => e.season?.type === 2 || e.season?.type === 3
+      );
 
       events.forEach(event => {
         const comp = event.competitions[0];
@@ -116,7 +120,11 @@ async function fetchScores() {
     }
   }
 
-  startTicker(segments.length ? segments.join('<span class="separator">|</span>') : "No games today.");
+  startTicker(
+    segments.length
+      ? segments.join('<span class="separator">|</span>')
+      : "No games today."
+  );
 }
 
 function startTicker(content) {
@@ -138,4 +146,3 @@ fetchScores();
 </script>
 </body>
 </html>
-
