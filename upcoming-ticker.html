@@ -7,7 +7,22 @@
 /* ============================
    TICKER LAYOUT
    ============================ */
+.round-header {
+  font-weight: 700;
+  font-size: 14px;
+  margin: 12px 0 4px;
+  opacity: 0.9;
+}
 
+.live-badge {
+  background: red;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  margin-right: 6px;
+}
+   
 #tickerWrap {
   width: 100%;
   overflow: hidden;
@@ -169,7 +184,8 @@ const leagueColors = {
 
 const TOP_N = 5;
 const LOOP_PAUSE = 1500;
-const REFRESH_INTERVAL = 10 * 60 * 1000;
+// Auto-refresh every 5 minutes
+const REFRESH_INTERVAL = 5 * 60 * 1000;
 const SCROLL_DURATION = 70000;
 
 dbg("Config loaded successfully", "#00ff00");
@@ -185,21 +201,18 @@ function formatPST(iso) {
   try {
     const d = new Date(iso);
 
-    // Convert to PST parts using toLocaleString
     const pstString = d.toLocaleString("en-US", {
       timeZone: "America/Los_Angeles",
-      month: "numeric",   // 1–12, no leading zero
-      day: "numeric",     // 1–31, no leading zero
+      month: "numeric",
+      day: "numeric",
       hour: "numeric",
       minute: "2-digit",
       hour12: true
     });
 
-    // pstString will look like "1/12/2025, 1:15 PM"
     const [datePart, timePart] = pstString.split(", ");
     const [month, day] = datePart.split("/");
 
-    // Return "M/D h:mm AM/PM"
     return `${Number(month)}/${Number(day)} ${timePart}`;
   } catch {
     return "";
@@ -232,8 +245,21 @@ function isSpecialEvent(game) {
   );
 }
 
+// Helper: is this game in progress? (simple 3-hour window around start)
+function isInProgress(game) {
+  try {
+    const now = Date.now();
+    const start = new Date(game.rawDate).getTime();
+    const end = start + 3 * 60 * 60 * 1000;
+    return now >= start && now <= end;
+  } catch {
+    return false;
+  }
+}
+
 dbg("Utility functions loaded", "#00ff00");
 dbgGroupEnd();
+
 // ============================================================
 // TEAM DIRECTORY CACHE (LOGOS + COLORS)
 // ============================================================
@@ -533,12 +559,11 @@ async function fetchRegularGamesFromESPN() {
   dbgGroupEnd();
   return allGames;
 }
+
 // ============================================================
-// NFL.COM PLAYOFF FETCH (ALL ROUNDS POST-1 → POST-4)
+// NFL.COM SEASON YEAR HELPER (WITH TEST OVERRIDE)
 // ============================================================
 
-// Determine NFL season year dynamically
-// Jan–Feb → last season, Mar–Dec → current year
 function getNFLSeasonYear() {
   if (FORCE_TEST_SEASON) return TEST_SEASON_YEAR;
 
@@ -546,15 +571,19 @@ function getNFLSeasonYear() {
   const year = now.getFullYear();
   const month = now.getMonth() + 1;
 
-  // Jan–Feb belong to last season
   return month <= 2 ? year - 1 : year;
 }
 
-async function fetchPlayoffsFromNFLWeek(weekNumber) {
-  dbgGroup(`NFL.COM PLAYOFF FETCH — WEEK post-${weekNumber}`);
+// ============================================================
+// NFL.COM POSTSEASON SCRAPER (ALL ROUNDS IN ONE PAGE)
+// ============================================================
+
+async function fetchAllNFLPlayoffs() {
+  dbgGroup("NFL.COM POSTSEASON FETCH");
 
   const seasonYear = getNFLSeasonYear();
-  const url = `https://www.nfl.com/schedules/${seasonYear}/by-week/post-${weekNumber}`;
+  const url = `https://www.nfl.com/schedules/${seasonYear}/postseason/`;
+
   dbg(`NFL.com URL: ${url}`, "#4da6ff");
 
   try {
@@ -564,7 +593,6 @@ async function fetchPlayoffsFromNFLWeek(weekNumber) {
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, "text/html");
 
-    // Each matchup strip = one game
     const strips = doc.querySelectorAll(".nfl-c-matchup-strip");
     dbg(`NFL.com matchup strips found: ${strips.length}`, "#ccccff");
 
@@ -581,48 +609,28 @@ async function fetchPlayoffsFromNFLWeek(weekNumber) {
         const dateEl = strip.querySelector(".nfl-c-matchup-strip__date");
         const timeEl = strip.querySelector(".nfl-c-matchup-strip__time");
         const networkEl = strip.querySelector(".nfl-c-matchup-strip__network");
+        const roundEl = strip.closest(".nfl-c-matchup-strip-container")
+          ?.querySelector(".d3-o-section-title");
 
         const dateText = dateEl ? dateEl.textContent.trim() : "";
         const timeText = timeEl ? timeEl.textContent.trim() : "";
         const networkText = networkEl ? networkEl.textContent.trim() : "";
+        const roundText = roundEl ? roundEl.textContent.trim() : "Playoffs";
 
         if (!dateText || !timeText) return;
 
-        // dateText example: "Sun, Jan 12"
-        // Build a parseable string with season-year + ET
-        const seasonYearStr = String(getNFLSeasonYear());
-        const rawString = `${dateText} ${seasonYearStr} ${timeText} ET`;
-
+        const rawString = `${dateText} ${seasonYear} ${timeText} ET`;
         const rawDate = new Date(rawString);
         const iso = rawDate.toISOString();
-
-        // Map week → round label
-        let roundLabel = "";
-        switch (weekNumber) {
-          case 1:
-            roundLabel = "Wild Card";
-            break;
-          case 2:
-            roundLabel = "Divisional";
-            break;
-          case 3:
-            roundLabel = "Conference Championship";
-            break;
-          case 4:
-            roundLabel = "Super Bowl";
-            break;
-          default:
-            roundLabel = "Playoffs";
-        }
 
         games.push({
           league: "NFL",
           playoff: true,
-          playoffRound: roundLabel,
+          playoffRound: roundText,
           rawDate: iso,
-          pst: formatPST(iso),        // will be "M/D h:mm AM/PM"
-          network: networkText,       // e.g., "CBS"
-          score: 1.0,                 // high priority
+          pst: formatPST(iso),
+          network: networkText,
+          score: 1.0,
           away: { rawName: awayName },
           home: { rawName: homeName }
         });
@@ -631,36 +639,17 @@ async function fetchPlayoffsFromNFLWeek(weekNumber) {
       }
     });
 
-    dbg(`NFL.com parsed playoff games (post-${weekNumber}): ${games.length}`, "#ff66ff");
+    dbg(`NFL.com parsed playoff games: ${games.length}`, "#00ffff");
     dbgGroupEnd();
     return games;
 
   } catch (e) {
-    dbg(`NFL.com FETCH ERROR (post-${weekNumber}): ${e}`, "#ff4444");
+    dbg(`NFL.com FETCH ERROR: ${e}`, "#ff4444");
     dbgGroupEnd();
     return [];
   }
 }
 
-async function fetchAllNFLPlayoffs() {
-  dbgGroup("NFL.COM ALL PLAYOFF ROUNDS");
-
-  // post-1 → Wild Card, post-2 → Divisional, post-3 → Conf Champ, post-4 → SB
-  const results = await Promise.all([
-    fetchPlayoffsFromNFLWeek(1),
-    fetchPlayoffsFromNFLWeek(2),
-    fetchPlayoffsFromNFLWeek(3),
-    fetchPlayoffsFromNFLWeek(4)
-  ]);
-
-  const allGames = results.flat();
-  allGames.sort((a, b) => new Date(a.rawDate) - new Date(b.rawDate));
-
-  dbg(`NFL.com total playoff games: ${allGames.length}`, "#00ffff");
-  dbgGroupEnd();
-
-  return allGames;
-}
 // ============================================================
 // HYBRID MERGE — NFL.com → CBS → SN → ESPN
 // ============================================================
@@ -673,14 +662,13 @@ async function fetchHybridGames() {
     await loadTeamDirectory(lg);
   }
 
-  // Fetch all sources in parallel
   const [
     nflPlayoffs,
     cbsPlayoffs,
     snPlayoffs,
     espnGames
   ] = await Promise.all([
-    fetchAllNFLPlayoffs(),          // NEW TOP PRIORITY
+    fetchAllNFLPlayoffs(),
     fetchPlayoffGamesFromCBS(),
     fetchPlayoffsFromSportingNews(),
     fetchRegularGamesFromESPN()
@@ -691,13 +679,11 @@ async function fetchHybridGames() {
   dbg(`SN playoff count: ${snPlayoffs.length}`, "#ff66ff");
   dbg(`ESPN total count: ${espnGames.length}`, "#66ff66");
 
-  // Determine playoff source priority
   let playoffGames = [];
   if (nflPlayoffs.length) playoffGames = nflPlayoffs;
   else if (cbsPlayoffs.length) playoffGames = cbsPlayoffs;
   else if (snPlayoffs.length) playoffGames = snPlayoffs;
 
-  // Attach logos + colors
   function enrich(game) {
     const lg = game.league;
 
@@ -722,10 +708,7 @@ async function fetchHybridGames() {
   playoffGames = playoffGames.map(enrich);
   const regularGames = espnGames.map(enrich);
 
-  // Sort playoff games by date
   playoffGames.sort((a, b) => new Date(a.rawDate) - new Date(b.rawDate));
-
-  // Sort regular season by anticipation score
   regularGames.sort((a, b) => b.score - a.score);
 
   const combined = [...playoffGames, ...regularGames];
@@ -740,15 +723,15 @@ function render(html) {
   const el = document.getElementById("ticker");
   if (el) el.innerHTML = html;
 }
-   
+
 // ============================================================
-// RENDERING — SPECIAL EVENT GRADIENT PILLS
+// RENDERING — SPECIAL EVENT GRADIENT PILLS + ROUND HEADERS + LIVE
 // ============================================================
 
 function buildHTML(games) {
   dbgGroup("BUILDING HTML FOR GAMES");
 
-  const html = games.map(g => {
+  const html = games.map((g, i) => {
     const special = isSpecialEvent(g);
 
     const pillClass = special
@@ -759,12 +742,24 @@ function buildHTML(games) {
       ? `style="--awayColor:${g.away.team.color}; --homeColor:${g.home.team.color};"`
       : "";
 
-    // Build the time + network string
-    let timeString = g.pst; // already "M/D h:mm AM/PM"
+    // Round header
+    const prev = games[i - 1];
+    const showHeader = !prev || prev.playoffRound !== g.playoffRound;
+    const header = showHeader
+      ? `<div class="round-header">${g.playoffRound}</div>`
+      : "";
+
+    // LIVE badge
+    const live = isInProgress(g);
+    const liveBadge = live ? `<span class="live-badge">LIVE</span>` : "";
+
+    let timeString = g.pst;
     if (g.network) timeString += ` • ${g.network}`;
 
     return `
+      ${header}
       <span class="${pillClass}" ${style}>
+        ${liveBadge}
         <img src="${g.away.team.logo}" />
         ${g.away.team.abbreviation}
         <span style="margin:0 8px;">vs</span>
@@ -790,7 +785,8 @@ async function run(isRefresh = false) {
 
   try {
     const games = await fetchHybridGames();
-    render(games, isRefresh);
+    const html = buildHTML(games);
+    render(html);
   } catch (e) {
     dbg(`ERROR in run(): ${e}`, "#ff4444");
   }
