@@ -27,14 +27,41 @@ html, body {
 .ticker {
   white-space: nowrap;
   padding-left: 100%;
-  animation: scroll 75s linear infinite;
   font-size: 28px;
   color: white;
+  opacity: 0;
+}
+
+.scroll {
+  animation:
+    fadeIn 1.5s ease forwards,
+    scroll 70s linear forwards,
+    fadeOut 1.5s ease forwards;
+  animation-delay: 0s, 0s, 68.5s;
 }
 
 @keyframes scroll {
-  0% { transform: translateX(0); }
-  100% { transform: translateX(-100%); }
+  from { transform: translateX(0); }
+  to { transform: translateX(-100%); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+.live {
+  color: #00ff7f;
+  font-weight: bold;
+}
+
+.separator {
+  margin: 0 18px;
 }
 </style>
 </head>
@@ -52,6 +79,8 @@ const leagues = [
   { name: "NHL", url: "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard" }
 ];
 
+const PAUSE_BETWEEN_LOOPS = 3000; // 3 seconds
+
 async function fetchScores() {
   const segments = [];
 
@@ -63,32 +92,49 @@ async function fetchScores() {
 
       const res = await fetch(proxyUrl);
       const data = await res.json();
-
       const events = data.events || [];
 
       events.forEach(event => {
         const comp = event.competitions[0];
         const away = comp.competitors.find(t => t.homeAway === "away");
         const home = comp.competitors.find(t => t.homeAway === "home");
+        const status = comp.status.type;
+
+        const isLive = status.state === "in";
+        const statusText = isLive ? "LIVE" : status.shortDetail;
 
         segments.push(
-          `${league.name}: ${away.team.abbreviation} ${away.score} – ${home.score} ${home.team.abbreviation} (${comp.status.type.shortDetail})`
+          `<span class="${isLive ? 'live' : ''}">
+            ${league.name}: ${away.team.abbreviation} ${away.score} – ${home.score} ${home.team.abbreviation}
+            (${statusText})
+          </span>`
         );
       });
 
     } catch (err) {
-      console.error(league.name, err);
+      console.error(err);
     }
   }
 
-  document.getElementById("ticker").textContent =
-    segments.length ? segments.join("   |   ") : "No games today.";
+  startTicker(segments.length ? segments.join('<span class="separator">|</span>') : "No games today.");
+}
+
+function startTicker(content) {
+  const ticker = document.getElementById("ticker");
+
+  ticker.className = "ticker"; // reset
+  ticker.innerHTML = content;
+
+  // Force reflow to restart animation
+  void ticker.offsetWidth;
+
+  ticker.classList.add("scroll");
+
+  // Restart after full cycle + pause
+  setTimeout(fetchScores, 70000 + PAUSE_BETWEEN_LOOPS);
 }
 
 fetchScores();
-setInterval(fetchScores, 90000);
 </script>
 </body>
 </html>
-
-
