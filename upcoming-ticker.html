@@ -449,6 +449,144 @@ async function fetchScheduleGames() {
 // ============================================================
 // END OF CHUNK 2
 // ============================================================
+
+// ============================================================
+// CHUNK 3 — RENDERING + ANIMATION + DEBUG
+// ============================================================
+
+dbgGroup("CHUNK 3 LOADED — Rendering + Animation");
+
+// ------------------------------------------------------------
+// Build HTML for game pills
+// ------------------------------------------------------------
+function buildHTML(games) {
+  dbgGroup("BUILDING HTML FOR GAMES");
+  dbg(`Games received: ${games.length}`, "#00ffff");
+
+  const html = games.map((g, i) => {
+    dbg(`Game ${i + 1}: ${g.away.team?.abbreviation} vs ${g.home.team?.abbreviation}`, "#ccccff");
+
+    const lc = leagueColors[g.league] || "#222";
+
+    const aAbbr = g.away.team?.abbreviation || "";
+    const hAbbr = g.home.team?.abbreviation || "";
+
+    const aLogo = g.away.team?.logo;
+    const hLogo = g.home.team?.logo;
+
+    const aRec = g.away.record?.items?.[0]?.summary || "";
+    const hRec = g.home.record?.items?.[0]?.summary || "";
+
+    const playoffTag = g.playoff
+      ? `<span class="game-meta">${g.league} • ${g.playoffRound} • ${g.pst}</span>`
+      : `<span class="game-meta">${g.league} • ${g.pst}</span>`;
+
+    return `
+      <span class="game-pill" style="background:${lc};">
+        ${aLogo ? `<img src="${aLogo}" style="margin-right:6px;">` : ""}
+        ${aAbbr}${aRec ? ` (${aRec})` : ""}
+        <span style="margin:0 8px;">vs</span>
+        ${hAbbr}${hRec ? ` (${hRec})` : ""}
+        ${hLogo ? `<img src="${hLogo}" style="margin-left:6px;">` : ""}
+        ${playoffTag}
+      </span>
+    `;
+  }).join(`<span class="separator">|</span>`);
+
+  dbg("HTML build complete", "#00ff00");
+  dbgGroupEnd();
+  return html;
+}
+
+// ------------------------------------------------------------
+// Start scrolling loop
+// ------------------------------------------------------------
+function startLoop() {
+  dbgGroup("STARTING SCROLL LOOP");
+
+  const ticker = document.getElementById("ticker");
+  if (!ticker) {
+    dbg("ERROR: #ticker not found", "#ff4444");
+    dbgGroupEnd();
+    return;
+  }
+
+  dbg("Resetting animation", "#ccccff");
+
+  ticker.style.animation = "none";
+  ticker.style.opacity = "0";
+
+  void ticker.offsetWidth;
+
+  const scrollSeconds = SCROLL_DURATION / 1000;
+  dbg(`Scroll duration: ${scrollSeconds}s`, "#ccccff");
+
+  ticker.style.animation =
+    `fadeIn 0.4s ease forwards, scroll ${scrollSeconds}s linear forwards`;
+
+  dbg("Scroll animation applied", "#00ff00");
+
+  if (window.loopTimeout) clearTimeout(window.loopTimeout);
+
+  window.loopTimeout = setTimeout(() => {
+    dbg("Loop timeout reached — restarting loop", "#ffaa00");
+    startLoop();
+  }, SCROLL_DURATION + LOOP_PAUSE);
+
+  dbgGroupEnd();
+}
+
+// ------------------------------------------------------------
+// Render games to ticker
+// ------------------------------------------------------------
+function render(games, isRefresh = false) {
+  dbgGroup("RENDER() CALLED");
+
+  const wrap = document.getElementById("tickerWrap");
+  const ticker = document.getElementById("ticker");
+
+  if (!wrap || !ticker) {
+    dbg("ERROR: tickerWrap or ticker missing", "#ff4444");
+    dbgGroupEnd();
+    return;
+  }
+
+  dbg(`Rendering ${games.length} games`, "#00ffff");
+
+  if (!games.length) {
+    dbg("NO GAMES FOUND — showing fallback message", "#ffaa00");
+    wrap.classList.remove("hidden");
+    ticker.innerHTML = "No upcoming games found.";
+    ticker.style.opacity = "1";
+    ticker.style.animation = "none";
+    dbgGroupEnd();
+    return;
+  }
+
+  const newHTML = buildHTML(games);
+
+  if (isRefresh) {
+    dbg("Crossfade refresh triggered", "#ff66ff");
+    wrap.classList.add("hidden");
+
+    setTimeout(() => {
+      ticker.innerHTML = newHTML;
+      wrap.classList.remove("hidden");
+      startLoop();
+    }, 800);
+  } else {
+    dbg("Initial render", "#00ff00");
+    wrap.classList.remove("hidden");
+    ticker.innerHTML = newHTML;
+    startLoop();
+  }
+
+  dbgGroupEnd();
+}
+
+// ============================================================
+// END OF CHUNK 3
+// ============================================================
 </script>
 </body>
 </html>
