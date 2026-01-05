@@ -112,7 +112,6 @@ html, body {
 // DEBUG CONSOLE (BOTTOM 50% PANEL)
 // ============================================================
 
-// Create debug panel
 const debugPanel = document.createElement("div");
 debugPanel.id = "debugPanel";
 debugPanel.style.position = "fixed";
@@ -132,7 +131,6 @@ debugPanel.style.whiteSpace = "pre-wrap";
 debugPanel.style.borderTop = "2px solid #00ffea";
 document.body.appendChild(debugPanel);
 
-// Debug print function
 function dbg(msg, color = "#00ffea") {
   const line = document.createElement("div");
   line.style.color = color;
@@ -142,7 +140,6 @@ function dbg(msg, color = "#00ffea") {
   console.log(`%c${msg}`, `color:${color}; font-weight:bold`);
 }
 
-// Group helpers
 function dbgGroup(title) {
   dbg(`\n▼ ${title}`, "#4da6ff");
   console.group(title);
@@ -205,27 +202,11 @@ function formatPST(iso) {
 
 function winPct(team) {
   try {
-    if (!team.record || !team.record.items || !team.record.items.length) {
-      dbg(`winPct: no record for team ${team.id}`, "#ffaa00");
-      return 0.5;
-    }
-
-    const rec = team.record.items.find(r => r.type === "total") || team.record.items[0];
-    if (!rec || !rec.summary) {
-      dbg(`winPct: invalid summary for team ${team.id}`, "#ffaa00");
-      return 0.5;
-    }
-
-    const parts = rec.summary.split("-");
-    if (parts.length < 2) return 0.5;
-
-    const w = parseInt(parts[0], 10);
-    const l = parseInt(parts[1], 10);
-    if (w + l === 0) return 0.5;
-
-    return w / (w + l);
-  } catch (e) {
-    dbg(`winPct error: ${e}`, "#ff4444");
+    const rec = team.record?.items?.find(r => r.type === "total");
+    if (!rec || !rec.summary) return 0.5;
+    const [w, l] = rec.summary.split("-").map(Number);
+    return w + l === 0 ? 0.5 : w / (w + l);
+  } catch {
     return 0.5;
   }
 }
@@ -238,78 +219,82 @@ dbg("Utility functions loaded", "#00ff00");
 dbgGroupEnd();
 
 // ============================================================
-// END OF CHUNK 1
+// HYBRID DATA PIPELINE — CBS Playoffs + ESPN Regular Season
 // ============================================================
 
-  // ============================================================
-// CHUNK 2 — SCHEDULE API + EVENT FETCHING + TEAM RECORDS
-// ============================================================
+// 1. CBS PLAYOFF SCRAPER
+async function fetchPlayoffGamesFromCBS() {
+  dbgGroup("CBS PLAYOFF FETCH");
 
-dbgGroup("CHUNK 2 LOADED — Schedule API + Event Fetching");
-
-// ------------------------------------------------------------
-// Season Year Detection
-// ------------------------------------------------------------
-function getSeasonYear(leagueCode) {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth() + 1;
-
-  dbg(`Season year check for ${leagueCode}: now=${now.toISOString()}`, "#ccccff");
-
-  if (leagueCode === "NBA" || leagueCode === "NHL") {
-    const result = month >= 10 ? year : year - 1;
-    dbg(`NBA/NHL season year = ${result}`, "#ccccff");
-    return result;
-  }
-
-  if (leagueCode === "NFL") {
-    dbg(`NFL season year = ${year}`, "#ccccff");
-    return year;
-  }
-
-  if (leagueCode === "MLB") {
-    dbg(`MLB season year = ${year}`, "#ccccff");
-    return year;
-  }
-
-  dbg(`Default season year = ${year}`, "#ccccff");
-  return year;
-}
-
-// ------------------------------------------------------------
-// Fetch Team Record
-// ------------------------------------------------------------
-async function fetchTeamRecord(sport, league, teamId) {
-  const url = `https://sports.core.api.espn.com/v2/sports/${sport}/leagues/${league}/teams/${teamId}`;
-  dbg(`Fetching team record: ${url}`, "#ffaa00");
+  const url = "https://www.cbssports.com/nfl/schedule/playoffs/";
+  dbg(`CBS URL: ${url}`, "#4da6ff");
 
   try {
     const res = await fetch(PROXY + encodeURIComponent(url));
-    const data = await res.json();
-    dbg(`Team ${teamId} record fetched OK`, "#00ff00");
-    return data;
+    const html = await res.text();
+    dbg("CBS HTML fetched OK", "#00ff00");
+
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, "text/html");
+
+    const rows = doc.querySelectorAll("table tr");
+    dbg(`CBS rows found: ${rows.length}`, "#ccccff");
+
+    const games = [];
+
+    rows.forEach((row, idx) => {
+      const cells = row.querySelectorAll("td");
+      if (cells.length < 3) return;
+
+      const dateText = cells[0].textContent.trim();
+      const timeText = cells[1].textContent.trim();
+      const matchupText = cells[2].textContent.trim();
+
+      if (!matchupText.includes("at") && !matchupText.includes("@")) return;
+
+      dbg(`CBS row ${idx}: ${dateText} | ${timeText} | ${matchupText}`, "#ccccff");
+
+      let [awayName, homeName] = matchupText.split(/at|@/i).map(s => s.trim());
+      if (!awayName || !homeName) return;
+
+      const rawString = `${dateText} ${timeText} PST`;
+      const rawDate = new Date(rawString);
+      const iso = rawDate.toISOString();
+
+      games.push({
+        league: "NFL",
+        playoff: true,
+        playoffRound: "Playoffs",
+        rawDate: iso,
+        pst: formatPST(iso),
+        score: 1.0,
+        away: { team: { abbreviation: awayName, logo: null }, record: null },
+        home: { team: { abbreviation: homeName, logo: null }, record: null }
+      });
+    });
+
+    dbg(`CBS parsed playoff games: ${games.length}`, "#ff66ff");
+    dbgGroupEnd();
+    return games;
+
   } catch (e) {
-    dbg(`ERROR fetching team record ${teamId}: ${e}`, "#ff4444");
-    return null;
+    dbg(`CBS ERROR: ${e}`, "#ff4444");
+    dbgGroupEnd();
+    return [];
   }
 }
 
-// ------------------------------------------------------------
-// Fetch Schedule Games (MAIN PIPELINE)
-// ------------------------------------------------------------
-async function fetchHybridGames() {
-  dbgGroup("FETCHING SCHEDULE GAMES");
+// 2. ESPN REGULAR SEASON FETCH
+async function fetchRegularGamesFromESPN() {
+  dbgGroup("ESPN REGULAR FETCH");
 
-  let playoffGames = [];
-  let regularGames = [];
+  const allGames = [];
 
   for (const lg of leagues) {
-    dbgGroup(`League: ${lg.code}`);
+    dbgGroup(`ESPN League: ${lg.code}`);
 
-    const season = getSeasonYear(lg.code);
+    const season = new Date().getFullYear();
 
-    // 30‑day window
     const now = new Date();
     const end = new Date(now.getTime() + 30 * 86400000);
 
@@ -320,47 +305,44 @@ async function fetchHybridGames() {
       `https://sports.core.api.espn.com/v2/sports/${lg.sport}/` +
       `leagues/${lg.league}/seasons/${season}/events?dates=${startStr}-${endStr}`;
 
-    dbg(`Schedule URL: ${scheduleURL}`, "#4da6ff");
+    dbg(`ESPN URL: ${scheduleURL}`, "#4da6ff");
 
     let scheduleData;
     try {
       const res = await fetch(PROXY + encodeURIComponent(scheduleURL));
       scheduleData = await res.json();
-      dbg(`Schedule fetch OK for ${lg.code}`, "#00ff00");
+      dbg("ESPN schedule OK", "#00ff00");
     } catch (e) {
-      dbg(`ERROR fetching schedule for ${lg.code}: ${e}`, "#ff4444");
+      dbg(`ESPN ERROR: ${e}`, "#ff4444");
       dbgGroupEnd();
       continue;
     }
 
-    if (!scheduleData.items || !scheduleData.items.length) {
-      dbg(`No schedule items for ${lg.code}`, "#ffaa00");
+    if (!scheduleData.items?.length) {
+      dbg("ESPN returned NO items", "#ffaa00");
       dbgGroupEnd();
       continue;
     }
 
-    dbg(`Schedule returned ${scheduleData.items.length} items`, "#ccccff");
+    dbg(`ESPN items: ${scheduleData.items.length}`, "#ccccff");
 
-    // --------------------------------------------------------
-    // Loop through events
-    // --------------------------------------------------------
     for (const item of scheduleData.items) {
-      dbgGroup(`Event REF: ${item.$ref}`);
+      dbgGroup(`ESPN Event: ${item.$ref}`);
 
       let ev;
       try {
         const evRes = await fetch(PROXY + encodeURIComponent(item.$ref));
         ev = await evRes.json();
-        dbg("Event fetched OK", "#00ff00");
+        dbg("Event OK", "#00ff00");
       } catch (e) {
-        dbg(`ERROR fetching event: ${e}`, "#ff4444");
+        dbg(`Event ERROR: ${e}`, "#ff4444");
         dbgGroupEnd();
         continue;
       }
 
       const comp = ev.competitions?.[0];
       if (!comp) {
-        dbg("No competition object — skipping", "#ffaa00");
+        dbg("No competition", "#ffaa00");
         dbgGroupEnd();
         continue;
       }
@@ -369,7 +351,7 @@ async function fetchHybridGames() {
       dbg(`SeasonType = ${seasonType}`, "#ccccff");
 
       if (![2, 3, 4].includes(seasonType)) {
-        dbg("Filtered out — not seasonType 2/3/4", "#ffaa00");
+        dbg("Filtered out", "#ffaa00");
         dbgGroupEnd();
         continue;
       }
@@ -379,27 +361,22 @@ async function fetchHybridGames() {
       const home = teams.find(t => t.homeAway === "home");
 
       if (!away || !home) {
-        dbg("Missing away/home teams — skipping", "#ff4444");
+        dbg("Missing teams", "#ff4444");
         dbgGroupEnd();
         continue;
       }
 
-      // ------------------------------------------------------
-      // Fetch team records
-      // ------------------------------------------------------
-      const awayRec = await fetchTeamRecord(lg.sport, lg.league, away.id);
-      const homeRec = await fetchTeamRecord(lg.sport, lg.league, home.id);
+      const awayRec = null;
+      const homeRec = null;
 
-      away.record = awayRec?.record || null;
-      home.record = homeRec?.record || null;
+      away.record = awayRec;
+      home.record = homeRec;
 
-      const aStr = winPct(away);
-      const hStr = winPct(home);
-      const score = anticipation(aStr, hStr);
+      const aPct = winPct(away);
+      const hPct = winPct(home);
+      const score = anticipation(aPct, hPct);
 
-      dbg(`Anticipation score = ${score}`, "#b366ff");
-
-      const game = {
+      allGames.push({
         league: lg.code,
         away,
         home,
@@ -408,99 +385,78 @@ async function fetchHybridGames() {
         pst: formatPST(ev.date),
         playoff: seasonType >= 3,
         playoffRound: comp.notes?.[0]?.headline || "Playoffs"
-      };
+      });
 
-      if (game.playoff) {
-        dbg("Added to PLAYOFF games", "#ff66ff");
-        playoffGames.push(game);
-      } else {
-        dbg("Added to REGULAR games", "#66ff66");
-        regularGames.push(game);
-      }
-
-      dbgGroupEnd(); // event
+      dbgGroupEnd();
     }
 
-    dbgGroupEnd(); // league
+    dbgGroupEnd();
   }
 
-  dbg("Sorting playoff games…", "#ccccff");
-  playoffGames.sort((a, b) => {
-    const d = new Date(a.rawDate) - new Date(b.rawDate);
-    if (d !== 0) return d;
-    return b.score - a.score;
-  });
+  dbg(`ESPN total games: ${allGames.length}`, "#00ffff");
+  dbgGroupEnd();
+  return allGames;
+}
 
-  dbg("Sorting regular games…", "#ccccff");
-  regularGames.sort((a, b) => {
-    const s = b.score - a.score;
-    if (s !== 0) return s;
-    return new Date(a.rawDate) - new Date(b.rawDate);
-  });
+// 3. HYBRID MERGE
+async function fetchHybridGames() {
+  dbgGroup("HYBRID FETCH START");
+
+  const [cbsPlayoffs, espnGames] = await Promise.all([
+    fetchPlayoffGamesFromCBS(),
+    fetchRegularGamesFromESPN()
+  ]);
+
+  dbg(`CBS playoff count: ${cbsPlayoffs.length}`, "#ff66ff");
+  dbg(`ESPN total count: ${espnGames.length}`, "#66ff66");
+
+  const playoffGames = cbsPlayoffs.length
+    ? cbsPlayoffs
+    : espnGames.filter(g => g.playoff);
+
+  const regularGames = espnGames.filter(g => !g.playoff);
+
+  playoffGames.sort((a, b) => new Date(a.rawDate) - new Date(b.rawDate));
+  regularGames.sort((a, b) => b.score - a.score);
 
   const combined = [...playoffGames, ...regularGames];
-  dbg(`FINAL GAME COUNT = ${combined.length}`, "#00ffff");
 
-  dbgGroupEnd(); // FETCHING SCHEDULE GAMES
+  dbg(`HYBRID FINAL COUNT = ${combined.length}`, "#00ffff");
+  dbgGroupEnd();
 
   return combined.slice(0, TOP_N);
 }
 
 // ============================================================
-// END OF CHUNK 2
-// ============================================================
-
-// ============================================================
-// CHUNK 3 — RENDERING + ANIMATION + DEBUG
+// RENDERING + ANIMATION
 // ============================================================
 
 dbgGroup("CHUNK 3 LOADED — Rendering + Animation");
 
-// ------------------------------------------------------------
-// Build HTML for game pills
-// ------------------------------------------------------------
 function buildHTML(games) {
   dbgGroup("BUILDING HTML FOR GAMES");
   dbg(`Games received: ${games.length}`, "#00ffff");
 
   const html = games.map((g, i) => {
-    dbg(`Game ${i + 1}: ${g.away.team?.abbreviation} vs ${g.home.team?.abbreviation}`, "#ccccff");
+    dbg(`Game ${i + 1}: ${g.away.team.abbreviation} vs ${g.home.team.abbreviation}`, "#ccccff");
 
     const lc = leagueColors[g.league] || "#222";
 
-    const aAbbr = g.away.team?.abbreviation || "";
-    const hAbbr = g.home.team?.abbreviation || "";
-
-    const aLogo = g.away.team?.logo;
-    const hLogo = g.home.team?.logo;
-
-    const aRec = g.away.record?.items?.[0]?.summary || "";
-    const hRec = g.home.record?.items?.[0]?.summary || "";
-
-    const playoffTag = g.playoff
-      ? `<span class="game-meta">${g.league} • ${g.playoffRound} • ${g.pst}</span>`
-      : `<span class="game-meta">${g.league} • ${g.pst}</span>`;
-
     return `
-      <span class="game-pill" style="background:${lc};">
-        ${aLogo ? `<img src="${aLogo}" style="margin-right:6px;">` : ""}
-        ${aAbbr}${aRec ? ` (${aRec})` : ""}
+      <span class="game-pill" style="background:${lc}; padding:6px 12px; margin-right:12px; border-radius:6px; display:inline-flex; align-items:center;">
+        ${g.away.team.abbreviation}
         <span style="margin:0 8px;">vs</span>
-        ${hAbbr}${hRec ? ` (${hRec})` : ""}
-        ${hLogo ? `<img src="${hLogo}" style="margin-left:6px;">` : ""}
-        ${playoffTag}
+        ${g.home.team.abbreviation}
+        <span style="margin-left:12px; opacity:0.8;">${g.pst}</span>
       </span>
     `;
-  }).join(`<span class="separator">|</span>`);
+  }).join("");
 
   dbg("HTML build complete", "#00ff00");
   dbgGroupEnd();
   return html;
 }
 
-// ------------------------------------------------------------
-// Start scrolling loop
-// ------------------------------------------------------------
 function startLoop() {
   dbgGroup("STARTING SCROLL LOOP");
 
@@ -510,8 +466,6 @@ function startLoop() {
     dbgGroupEnd();
     return;
   }
-
-  dbg("Resetting animation", "#ccccff");
 
   ticker.style.animation = "none";
   ticker.style.opacity = "0";
@@ -536,9 +490,6 @@ function startLoop() {
   dbgGroupEnd();
 }
 
-// ------------------------------------------------------------
-// Render games to ticker
-// ------------------------------------------------------------
 function render(games, isRefresh = false) {
   dbgGroup("RENDER() CALLED");
 
@@ -584,18 +535,14 @@ function render(games, isRefresh = false) {
   dbgGroupEnd();
 }
 
+dbgGroupEnd();
+
 // ============================================================
-// END OF CHUNK 3
-// ============================================================
-// ============================================================
-// CHUNK 4 — INIT + MAIN LOOP + DEBUG
+// INIT + MAIN LOOP
 // ============================================================
 
 dbgGroup("CHUNK 4 LOADED — Init + Main Loop");
 
-// ------------------------------------------------------------
-// MAIN RUN FUNCTION
-// ------------------------------------------------------------
 async function run(isRefresh = false) {
   dbgGroup(`RUN() CALLED — isRefresh=${isRefresh}`);
 
@@ -613,9 +560,6 @@ async function run(isRefresh = false) {
   dbgGroupEnd();
 }
 
-// ------------------------------------------------------------
-// INIT FUNCTION
-// ------------------------------------------------------------
 function init() {
   dbgGroup("INIT() CALLED");
 
@@ -634,16 +578,10 @@ function init() {
   dbgGroupEnd();
 }
 
-// ------------------------------------------------------------
-// START EVERYTHING
-// ------------------------------------------------------------
 dbg("Calling init() to start ticker…", "#00ff00");
 init();
 
-dbgGroupEnd(); // CHUNK 4
-// ============================================================
-// END OF CHUNK 4
-// ============================================================
+dbgGroupEnd();
 </script>
 </body>
 </html>
