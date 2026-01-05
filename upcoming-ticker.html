@@ -537,9 +537,13 @@ async function fetchRegularGamesFromESPN() {
 // Determine NFL season year dynamically
 // Jan–Feb → last season, Mar–Dec → current year
 function getNFLSeasonYear() {
+  if (FORCE_TEST_SEASON) return TEST_SEASON_YEAR;
+
   const now = new Date();
   const year = now.getFullYear();
   const month = now.getMonth() + 1;
+
+  // Jan–Feb belong to last season
   return month <= 2 ? year - 1 : year;
 }
 
@@ -729,6 +733,11 @@ async function fetchHybridGames() {
   return combined.slice(0, TOP_N);
 }
 
+function render(html) {
+  const el = document.getElementById("ticker");
+  if (el) el.innerHTML = html;
+}
+   
 // ============================================================
 // RENDERING — SPECIAL EVENT GRADIENT PILLS
 // ============================================================
