@@ -5,49 +5,84 @@
 <title>Live Sports Scores Ticker</title>
 
 <style>
-  html, body {
-    margin: 0;
-    padding: 0;
-    background: transparent;
-    overflow: hidden;
-    font-family: Arial, Helvetica, sans-serif;
-  }
+html, body {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  overflow: hidden;
+  font-family: Arial, Helvetica, sans-serif;
+}
 
-  .ticker-wrap {
-    position: fixed;
-    bottom: 0;
-    width: 100%;
-    height: 80px;
-    background: rgba(0, 0, 0, 0.35); /* subtle bar; still transparent */
-    display: flex;
-    align-items: center;
-    overflow: hidden;
-  }
+.ticker-wrap {
+  position: fixed;
+  bottom: 0;
+  width: 100%;
+  height: 80px;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
 
-  .ticker {
-    display: inline-block;
-    white-space: nowrap;
-    padding-left: 100%;
-    animation: ticker-scroll 45s linear infinite;
-    font-size: 28px;
-    color: #ffffff;
-  }
+.ticker {
+  display: inline-block;
+  white-space: nowrap;
+  padding-left: 100%;
+  animation: ticker-scroll 45s linear infinite;
+  font-size: 28px;
+  color: #ffffff;
+}
 
-  @keyframes ticker-scroll {
-    0%   { transform: translateX(0); }
-    100% { transform: translateX(-100%); }
-  }
+@keyframes ticker-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-100%); }
+}
 </style>
 </head>
 
 <body>
-  <div class="ticker-wrap">
-    <div class="ticker" id="ticker">
-      Loading today’s scores…
-    </div>
-  </div>
+<div class="ticker-wrap">
+  <div class="ticker" id="ticker">Loading today’s scores…</div>
+</div>
 
 <script>
 const leagues = [
-  { name: "NFL", url: "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard" },
-  { name: "NBA", url: "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboar
+  { name: "NFL", url: "https://cdn.espn.com/core/nfl/scoreboard?xhr=1" },
+  { name: "NBA", url: "https://cdn.espn.com/core/nba/scoreboard?xhr=1" },
+  { name: "MLB", url: "https://cdn.espn.com/core/mlb/scoreboard?xhr=1" },
+  { name: "NHL", url: "https://cdn.espn.com/core/nhl/scoreboard?xhr=1" }
+];
+
+async function fetchScores() {
+  const segments = [];
+
+  for (const league of leagues) {
+    try {
+      const res = await fetch(league.url);
+      const data = await res.json();
+      const events = data.content.scoreboard.evts || [];
+
+      events.forEach(evt => {
+        const comp = evt.competitions[0];
+        const away = comp.competitors.find(t => t.homeAway === "away");
+        const home = comp.competitors.find(t => t.homeAway === "home");
+
+        segments.push(
+          `${league.name}: ${away.team.abbreviation} ${away.score} – ${home.score} ${home.team.abbreviation} (${comp.status.type.shortDetail})`
+        );
+      });
+
+    } catch (e) {
+      console.error(`${league.name} error`, e);
+    }
+  }
+
+  document.getElementById("ticker").textContent =
+    segments.length ? segments.join("   |   ") : "No games today.";
+}
+
+fetchScores();
+setInterval(fetchScores, 90000);
+</script>
+</body>
+</html>
