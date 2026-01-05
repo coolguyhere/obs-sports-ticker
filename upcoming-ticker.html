@@ -603,7 +603,7 @@ async function run(isRefresh = false) {
     dbg("Calling fetchScheduleGames()…", "#4da6ff");
     const games = await fetchHybridGames();
 
-    dbg(`fetchScheduleGames() returned ${games.length} games`, "#00ffff");
+    dbg(`fetchHybridGames() returned ${games.length} games`, "#00ffff");
 
     render(games, isRefresh);
   } catch (e) {
