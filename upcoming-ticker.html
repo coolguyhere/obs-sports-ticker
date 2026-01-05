@@ -115,19 +115,23 @@ const PROXY = "https://api.allorigins.win/raw?url=";
 const leagues = [
   {
     code: "NFL",
-    scoreboard: "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
+    scoreboard: "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard",
+    calendar:   "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?calendar=true"
   },
   {
     code: "NBA",
-    scoreboard: "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard"
+    scoreboard: "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard",
+    calendar:   "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?calendar=true"
   },
   {
     code: "MLB",
-    scoreboard: "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard"
+    scoreboard: "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard",
+    calendar:   "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard?calendar=true"
   },
   {
     code: "NHL",
-    scoreboard: "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard"
+    scoreboard: "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard",
+    calendar:   "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard?calendar=true"
   }
 ];
 
@@ -142,21 +146,7 @@ const TOP_N = 5;
 const SCROLL_DURATION = 70000;
 const PAUSE = 3000;
 
-// ---------------- DATE HELPERS ----------------
-
-function getDates(days) {
-  const arr = [];
-  const today = new Date();
-  for (let i = 1; i <= days; i++) {
-    const d = new Date(today);
-    d.setDate(d.getDate() + i);
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const da = String(d.getDate()).padStart(2, "0");
-    arr.push(`${y}${m}${da}`);
-  }
-  return arr;
-}
+// ---------------- HELPERS ----------------
 
 function formatPST(iso) {
   try {
@@ -171,8 +161,6 @@ function formatPST(iso) {
     return "";
   }
 }
-
-// ---------------- STRENGTH / SCORE ----------------
 
 function winPct(team) {
   if (!team.records) return 0.5;
@@ -192,67 +180,85 @@ function anticipation(a, b) {
   return avg - diff;
 }
 
-// ---------------- FETCHING ----------------
+// ---------------- CALENDAR FETCH ----------------
+
+async function getNextCalendarDates(league) {
+  try {
+    const url = PROXY + encodeURIComponent(league.calendar);
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (!data.calendar) return [];
+
+    const future = [];
+
+    for (const block of data.calendar) {
+      for (const entry of block.entries) {
+        if (entry.startDate) {
+          const d = entry.startDate.substring(0, 10).replace(/-/g, "");
+          future.push(d);
+        }
+      }
+    }
+
+    return [...new Set(future)].slice(0, 12);
+  } catch {
+    return [];
+  }
+}
+
+// ---------------- FETCH GAMES ----------------
 
 async function fetchGames() {
   let playoffGames = [];
   let regularGames = [];
 
-  // Expand search window until we find something
-  const windows = [7, 14, 21, 30];
+  for (const league of leagues) {
+    const dates = await getNextCalendarDates(league);
+    if (!dates.length) continue;
 
-  for (const days of windows) {
-    const dates = getDates(days);
+    for (const date of dates) {
+      try {
+        const url = PROXY + encodeURIComponent(`${league.scoreboard}?dates=${date}`);
+        const res = await fetch(url);
+        const data = await res.json();
+        const events = data.events || [];
 
-    for (const league of leagues) {
-      for (const date of dates) {
-        try {
-          const url = PROXY + encodeURIComponent(`${league.scoreboard}?dates=${date}`);
-          const res = await fetch(url);
-          const data = await res.json();
-          const events = data.events || [];
+        for (const ev of events) {
+          const comp = ev.competitions?.[0];
+          if (!comp) continue;
 
-          for (const ev of events) {
-            const comp = ev.competitions?.[0];
-            if (!comp) continue;
+          const seasonType = comp.season?.type;
+          if (![2, 3].includes(seasonType)) continue;
 
-            const seasonType = comp.season?.type;
-            if (![2, 3].includes(seasonType)) continue;
+          const teams = comp.competitors || [];
+          const away = teams.find(t => t.homeAway === "away");
+          const home = teams.find(t => t.homeAway === "home");
+          if (!away || !home) continue;
 
-            const teams = comp.competitors || [];
-            const away = teams.find(t => t.homeAway === "away");
-            const home = teams.find(t => t.homeAway === "home");
-            if (!away || !home) continue;
+          const aStr = winPct(away);
+          const hStr = winPct(home);
+          const score = anticipation(aStr, hStr);
 
-            const aStr = winPct(away);
-            const hStr = winPct(home);
-            const score = anticipation(aStr, hStr);
+          const game = {
+            league: league.code,
+            away,
+            home,
+            score,
+            rawDate: ev.date,
+            pst: formatPST(ev.date),
+            playoff: seasonType === 3,
+            playoffRound: comp.notes?.[0]?.headline || "Playoffs"
+          };
 
-            const game = {
-              league: league.code,
-              away,
-              home,
-              score,
-              rawDate: ev.date,
-              pst: formatPST(ev.date),
-              playoff: seasonType === 3,
-              playoffRound: comp.notes?.[0]?.headline || "Playoffs"
-            };
-
-            if (game.playoff) playoffGames.push(game);
-            else regularGames.push(game);
-          }
-        } catch {}
-      }
+          if (game.playoff) playoffGames.push(game);
+          else regularGames.push(game);
+        }
+      } catch {}
     }
-
-    if (playoffGames.length || regularGames.length) break;
   }
 
-  // Sort playoff games first
   playoffGames.sort((a, b) => new Date(a.rawDate) - new Date(b.rawDate));
-
-  // Sort regular games by anticipation
   regularGames.sort((a, b) => b.score - a.score);
 
   return [...playoffGames, ...regularGames].slice(0, TOP_N);
