@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Top Games This Week</title>
+<style>
+html, body {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  overflow: hidden;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Wrapper fixed to TOP (for OBS top bar) */
+.ticker-wrap {
+  position: fixed;
+  top: 0;
+  width: 100%;
+  height: 80px;
+  background: rgba(0,0,0,0.35);
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  transition: opacity 0.8s ease;
+}
+
+.ticker-wrap.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Left label: "Top Games This Week" */
+.ticker-label {
+  flex: 0 0 auto;
+  padding: 0 18px;
+  font-size: 22px;
+  font-weight: bold;
+  color: #ffffff;
+  text-transform: uppercase;
+  border-right: 2px solid rgba(255,255,255,0.3);
+}
+
+/* Scrolling area */
+.ticker {
+  flex: 1 1 auto;
+  white-space: nowrap;
+  padding-left: 100%;
+  font-size: 22px;
+  color: #ffffff;
+  opacity: 0;
+}
+
+.scroll {
+  animation:
+    fadeIn 1.5s ease forwards,
+    scroll 70s linear forwards,
+    fadeOut 1.5s ease forwards;
+  animation-delay: 0s, 0s, 68.5s;
+}
+
+@keyframes scroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-100%); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+.separator {
+  margin: 0 18px;
+  color: #ffffff;
+}
+
+/* Game pill styling */
+.game-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 6px 12px;
+}
+
+.game-pill img {
+  height: 22px;
+  width: 22px;
+  object-fit: contain;
+}
+
+/* Small helper text inside pill */
+.game-meta {
+  font-size: 14px;
+  opacity: 0.9;
+  margin-left: 8px;
+}
+</style>
+</head>
+<body>
+
+<div class="ticker-wrap" id="tickerWrap">
+  <div class="ticker-label">Top Games This Week</div>
+  <div class="ticker" id="ticker">Loading upcoming games…</div>
+</div>
+
+<script>
+// --- CONFIG ---
+
+// AllOrigins proxy (required because ESPN blocks GitHub/OBS direct)
+const PROXY = "https://api.allorigins.win/raw?url=";
+
+// Leagues + ESPN scoreboard endpoints (site.api is friendlier for this use)
+const leagues = [
+  {
+    code: "NFL",
+    name: "NFL",
+    scoreboardBase: "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
+  },
+  {
+    code: "NBA",
+    name: "NBA",
+    scoreboardBase: "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard"
+  },
+  {
+    code: "MLB",
+    name: "MLB",
+    scoreboardBase: "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard"
+  },
+  {
+    code: "NHL",
+    name: "NHL",
+    scoreboardBase: "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard"
+  }
+];
+
+// League colors for pills
+const leagueColors = {
+  NFL: "#013369",
+  NBA: "#17408B",
+  MLB: "#002D72",
+  NHL: "#111111"
+};
+
+// How often to refresh (ms). 70s animation + ~3s pause.
+const PAUSE_BETWEEN_LOOPS = 3000;
+const SCROLL_DURATION_MS = 70000;
+
+// How many top games to show
+const TOP_N_GAMES = 5;
+
+// --- DATE HELPERS ---
+
+// Returns array of YYYYMMDD for the NEXT 7 days, EXCLUDING today (strictly future)
+function getNext7DaysFuture() {
+  const dates = [];
+  const today = new Date();
+
+  for (let i = 1; i <= 7; i++) {
+    const d = new Date(today);
+    d.setDate(d.getDate() + i);
+
+    const year  = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day   = String(d.getDate()).padStart(2, "0");
+
+    dates.push(`${year}${month}${day}`);
+  }
+  return dates;
+}
+
+// Convert ESPN UTC date to PST display string
+function formatDatePST(isoString) {
+  try {
+    const d = new Date(isoString);
+    return d.toLocaleString("en-US", {
+      timeZone: "America/Los_Angeles",
+      weekday: "short",
+      hour: "numeric",
+      minute: "2-digit"
+    });
+  } catch (e) {
+    return "";
+  }
+}
+
+// --- STRENGTH / ANTICIPATION SCORE ---
+
+// Extract win% from a competitor's record summary like "10-5" or "35-20"
+function getWinPctFromCompetitor(competitor) {
+  if (!competitor || !competitor.records || !Array.isArray(competitor.records)) {
+    return 0.5; // neutral fallback
+  }
+
+  // Often there's a "total" or "overall" record; fallback to first
+  let rec = competitor.records.find(r =>
+    r.type === "total" || r.name === "Total" || r.type === "overall"
+  );
+  if (!rec) {
+    rec = competitor.records[0];
+  }
+  if (!rec || !rec.summary) return 0.5;
+
+  // summary like "10-5" or "35-20-2"
+  const parts = rec.summary.split("-");
+  if (parts.length < 2) return 0.5;
+
+  const wins = parseInt(parts[0], 10);
+  const losses = parseInt(parts[1], 10);
+  if (!Number.isFinite(wins) || !Number.isFinite(losses)) return 0.5;
+
+  const total = wins + losses;
+  if (total === 0) return 0.5;
+
+  return wins / total;
+}
+
+// Anticipation score = avg strength - difference (Option B)
+function getAnticipationScore(p1, p2) {
+  const avg = (p1 + p2) / 2;
+  const diff = Math.abs(p1 - p2);
+  return avg - diff;
+}
+
+// --- FETCH UPCOMING GAMES ---
+
+async function fetchUpcomingGames() {
+  const dates = getNext7DaysFuture();
+  const allGames = [];
+
+  for (const league of leagues) {
+    try {
+      for (const date of dates) {
+        const url = `${league.scoreboardBase}?dates=${date}`;
+        const proxied = PROXY + encodeURIComponent(url);
+
+        const res = await fetch(proxied);
+        const data = await res.json();
+
+        const events = data.events || [];
+        if (!events.length) continue;
+
+        for (const event of events) {
+          const comp = event.competitions && event.competitions[0];
+          if (!comp) continue;
+
+          // Filter by season type: 2=regular, 3=post; ignore preseason/offseason
+          const seasonType = comp.season && comp.season.type;
+          if (seasonType !== 2 && seasonType !== 3) continue;
+
+          const competitors = comp.competitors || [];
+          const away = competitors.find(t => t.homeAway === "away");
+          const home = competitors.find(t => t.homeAway === "home");
+          if (!away || !home) continue;
+
+          const awayStrength = getWinPctFromCompetitor(away);
+          const homeStrength = getWinPctFromCompetitor(home);
+          const anticipation = getAnticipationScore(awayStrength, homeStrength);
+
+          const gameDatePST = formatDatePST(event.date);
+
+          allGames.push({
+            league: league.code,
+            anticipation,
+            away,
+            home,
+            datePST: gameDatePST,
+            rawDate: event.date
+          });
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching league", league.code, err);
+    }
+  }
+
+  // Sort by anticipation descending, then by date ascending
+  allGames.sort((a, b) => {
+    if (b.anticipation !== a.anticipation) {
+      return b.anticipation - a.anticipation;
+    }
+    return new Date(a.rawDate) - new Date(b.rawDate);
+  });
+
+  // Take top N
+  return allGames.slice(0, TOP_N_GAMES);
+}
+
+// --- RENDER TICKER ---
+
+function renderTicker(games) {
+  const tickerWrap = document.getElementById("tickerWrap");
+  const ticker = document.getElementById("ticker");
+
+  if (!games || games.length === 0) {
+    tickerWrap.classList.add("hidden");
+    ticker.className = "ticker";
+    ticker.innerHTML = "";
+    scheduleNextFetch();
+    return;
+  }
+
+  tickerWrap.classList.remove("hidden");
+
+  const segments = games.map(g => {
+    const leagueColor = leagueColors[g.league] || "#222";
+
+    const awayAbbr = g.away.team && g.away.team.abbreviation || "";
+    const homeAbbr = g.home.team && g.home.team.abbreviation || "";
+
+    const awayLogo = g.away.team && g.away.team.logo;
+    const homeLogo = g.home.team && g.home.team.logo;
+
+    // Basic record strings for display
+    const awayRecord = (g.away.records && g.away.records[0] && g.away.records[0].summary) || "";
+    const homeRecord = (g.home.records && g.home.records[0] && g.home.records[0].summary) || "";
+
+    return `
+      <span class="game-pill" style="background:${leagueColor};">
+        ${awayLogo ? `<img src="${awayLogo}" style="margin-right:6px;">` : ""}
+        ${awayAbbr}${awayRecord ? ` (${awayRecord})` : ""}
+        <span style="margin: 0 8px;">vs</span>
+        ${homeAbbr}${homeRecord ? ` (${homeRecord})` : ""}
+        ${homeLogo ? `<img src="${homeLogo}" style="margin-left:6px;">` : ""}
+        <span class="game-meta">${g.league} • ${g.datePST}</span>
+      </span>
+    `;
+  });
+
+  ticker.className = "ticker";
+  ticker.innerHTML = segments.join('<span class="separator">|</span>');
+
+  // Force reflow to restart animation
+  void ticker.offsetWidth;
+  ticker.classList.add("scroll");
+
+  scheduleNextFetch();
+}
+
+function scheduleNextFetch() {
+  setTimeout(startTickerCycle, SCROLL_DURATION_MS + PAUSE_BETWEEN_LOOPS);
+}
+
+// --- MAIN LOOP ---
+
+async function startTickerCycle() {
+  try {
+    const games = await fetchUpcomingGames();
+    renderTicker(games);
+  } catch (e) {
+    console.error("Error in ticker cycle", e);
+  }
+}
+
+// Initial start
+startTickerCycle();
+</script>
+</body>
+</html>
