@@ -240,6 +240,215 @@ dbgGroupEnd();
 // ============================================================
 // END OF CHUNK 1
 // ============================================================
+
+  // ============================================================
+// CHUNK 2 — SCHEDULE API + EVENT FETCHING + TEAM RECORDS
+// ============================================================
+
+dbgGroup("CHUNK 2 LOADED — Schedule API + Event Fetching");
+
+// ------------------------------------------------------------
+// Season Year Detection
+// ------------------------------------------------------------
+function getSeasonYear(leagueCode) {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+
+  dbg(`Season year check for ${leagueCode}: now=${now.toISOString()}`, "#ccccff");
+
+  if (leagueCode === "NBA" || leagueCode === "NHL") {
+    const result = month >= 10 ? year : year - 1;
+    dbg(`NBA/NHL season year = ${result}`, "#ccccff");
+    return result;
+  }
+
+  if (leagueCode === "NFL") {
+    dbg(`NFL season year = ${year}`, "#ccccff");
+    return year;
+  }
+
+  if (leagueCode === "MLB") {
+    dbg(`MLB season year = ${year}`, "#ccccff");
+    return year;
+  }
+
+  dbg(`Default season year = ${year}`, "#ccccff");
+  return year;
+}
+
+// ------------------------------------------------------------
+// Fetch Team Record
+// ------------------------------------------------------------
+async function fetchTeamRecord(sport, league, teamId) {
+  const url = `https://sports.core.api.espn.com/v2/sports/${sport}/leagues/${league}/teams/${teamId}`;
+  dbg(`Fetching team record: ${url}`, "#ffaa00");
+
+  try {
+    const res = await fetch(PROXY + encodeURIComponent(url));
+    const data = await res.json();
+    dbg(`Team ${teamId} record fetched OK`, "#00ff00");
+    return data;
+  } catch (e) {
+    dbg(`ERROR fetching team record ${teamId}: ${e}`, "#ff4444");
+    return null;
+  }
+}
+
+// ------------------------------------------------------------
+// Fetch Schedule Games (MAIN PIPELINE)
+// ------------------------------------------------------------
+async function fetchScheduleGames() {
+  dbgGroup("FETCHING SCHEDULE GAMES");
+
+  let playoffGames = [];
+  let regularGames = [];
+
+  for (const lg of leagues) {
+    dbgGroup(`League: ${lg.code}`);
+
+    const season = getSeasonYear(lg.code);
+
+    // 30‑day window
+    const now = new Date();
+    const end = new Date(now.getTime() + 30 * 86400000);
+
+    const startStr = now.toISOString().slice(0, 10).replace(/-/g, "");
+    const endStr = end.toISOString().slice(0, 10).replace(/-/g, "");
+
+    const scheduleURL =
+      `https://sports.core.api.espn.com/v2/sports/${lg.sport}/` +
+      `leagues/${lg.league}/seasons/${season}/events?dates=${startStr}-${endStr}`;
+
+    dbg(`Schedule URL: ${scheduleURL}`, "#4da6ff");
+
+    let scheduleData;
+    try {
+      const res = await fetch(PROXY + encodeURIComponent(scheduleURL));
+      scheduleData = await res.json();
+      dbg(`Schedule fetch OK for ${lg.code}`, "#00ff00");
+    } catch (e) {
+      dbg(`ERROR fetching schedule for ${lg.code}: ${e}`, "#ff4444");
+      dbgGroupEnd();
+      continue;
+    }
+
+    if (!scheduleData.items || !scheduleData.items.length) {
+      dbg(`No schedule items for ${lg.code}`, "#ffaa00");
+      dbgGroupEnd();
+      continue;
+    }
+
+    dbg(`Schedule returned ${scheduleData.items.length} items`, "#ccccff");
+
+    // --------------------------------------------------------
+    // Loop through events
+    // --------------------------------------------------------
+    for (const item of scheduleData.items) {
+      dbgGroup(`Event REF: ${item.$ref}`);
+
+      let ev;
+      try {
+        const evRes = await fetch(PROXY + encodeURIComponent(item.$ref));
+        ev = await evRes.json();
+        dbg("Event fetched OK", "#00ff00");
+      } catch (e) {
+        dbg(`ERROR fetching event: ${e}`, "#ff4444");
+        dbgGroupEnd();
+        continue;
+      }
+
+      const comp = ev.competitions?.[0];
+      if (!comp) {
+        dbg("No competition object — skipping", "#ffaa00");
+        dbgGroupEnd();
+        continue;
+      }
+
+      const seasonType = comp.season?.type;
+      dbg(`SeasonType = ${seasonType}`, "#ccccff");
+
+      if (![2, 3, 4].includes(seasonType)) {
+        dbg("Filtered out — not seasonType 2/3/4", "#ffaa00");
+        dbgGroupEnd();
+        continue;
+      }
+
+      const teams = comp.competitors || [];
+      const away = teams.find(t => t.homeAway === "away");
+      const home = teams.find(t => t.homeAway === "home");
+
+      if (!away || !home) {
+        dbg("Missing away/home teams — skipping", "#ff4444");
+        dbgGroupEnd();
+        continue;
+      }
+
+      // ------------------------------------------------------
+      // Fetch team records
+      // ------------------------------------------------------
+      const awayRec = await fetchTeamRecord(lg.sport, lg.league, away.id);
+      const homeRec = await fetchTeamRecord(lg.sport, lg.league, home.id);
+
+      away.record = awayRec?.record || null;
+      home.record = homeRec?.record || null;
+
+      const aStr = winPct(away);
+      const hStr = winPct(home);
+      const score = anticipation(aStr, hStr);
+
+      dbg(`Anticipation score = ${score}`, "#b366ff");
+
+      const game = {
+        league: lg.code,
+        away,
+        home,
+        score,
+        rawDate: ev.date,
+        pst: formatPST(ev.date),
+        playoff: seasonType >= 3,
+        playoffRound: comp.notes?.[0]?.headline || "Playoffs"
+      };
+
+      if (game.playoff) {
+        dbg("Added to PLAYOFF games", "#ff66ff");
+        playoffGames.push(game);
+      } else {
+        dbg("Added to REGULAR games", "#66ff66");
+        regularGames.push(game);
+      }
+
+      dbgGroupEnd(); // event
+    }
+
+    dbgGroupEnd(); // league
+  }
+
+  dbg("Sorting playoff games…", "#ccccff");
+  playoffGames.sort((a, b) => {
+    const d = new Date(a.rawDate) - new Date(b.rawDate);
+    if (d !== 0) return d;
+    return b.score - a.score;
+  });
+
+  dbg("Sorting regular games…", "#ccccff");
+  regularGames.sort((a, b) => {
+    const s = b.score - a.score;
+    if (s !== 0) return s;
+    return new Date(a.rawDate) - new Date(b.rawDate);
+  });
+
+  const combined = [...playoffGames, ...regularGames];
+  dbg(`FINAL GAME COUNT = ${combined.length}`, "#00ffff");
+
+  dbgGroupEnd(); // FETCHING SCHEDULE GAMES
+
+  return combined.slice(0, TOP_N);
+}
+
+// ============================================================
+// END OF CHUNK 2
+// ============================================================
 </script>
 </body>
 </html>
