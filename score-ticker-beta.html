@@ -136,7 +136,6 @@
 
   img.logo[hidden] { display:none; }
 
-  /* League tints (B2) */
   .pill.league-nfl { background-color: rgba(1, 51, 105, 0.20); }
   .pill.league-nba { background-color: rgba(23, 64, 139, 0.20); }
   .pill.league-mlb { background-color: rgba(0, 45, 114, 0.20); }
@@ -155,9 +154,6 @@
   </div>
 
 <script>
-/* ===========================
-   Config
-   =========================== */
 const TARGET_LOOP_SECONDS = 36;
 const MIN_PADDING = 600;
 const REFRESH_MS = 45_000;
@@ -171,12 +167,10 @@ const LEAGUES = [
 
 const CACHE_TTL = 30_000;
 
-/* Proxy helper for logos (and can be reused if needed) */
 function proxyUrl(url) {
   return "https://api.allorigins.win/raw?url=" + encodeURIComponent(url);
 }
 
-/* Network logo map (Wikimedia, proxied) */
 const NETWORK_LOGOS = {
   "ESPN": proxyUrl("https://upload.wikimedia.org/wikipedia/commons/2/2f/ESPN_wordmark.svg"),
   "ESPN2": proxyUrl("https://upload.wikimedia.org/wikipedia/commons/2/2e/ESPN2_wordmark.svg"),
@@ -198,9 +192,6 @@ const NETWORK_LOGOS = {
   "YouTube TV": proxyUrl("https://upload.wikimedia.org/wikipedia/commons/0/09/YouTube_TV_logo.svg")
 };
 
-/* ===========================
-   Helpers
-   =========================== */
 function safe(o, p, f = "") {
   try { return p.split(".").reduce((x, k) => (x && x[k] !== undefined ? x[k] : undefined), o) ?? f; }
   catch { return f; }
@@ -218,7 +209,6 @@ async function fetchJson(url) {
   return null;
 }
 
-/* A1: real PST from ESPN UTC */
 function pstTimestamp(iso) {
   try {
     if (!iso) return 0;
@@ -244,7 +234,6 @@ function formatPST(iso) {
   } catch { return ""; }
 }
 
-/* classify game state: 0=future, 1=live, 2=final */
 function gameState(item) {
   const st = (item.statusText || "").toUpperCase();
   if (item.isLive) return 1;
@@ -259,9 +248,6 @@ function gameSort(a, b) {
   return pstTimestamp(a.iso) - pstTimestamp(b.iso);
 }
 
-/* ===========================
-   Data fetch & assemble
-   =========================== */
 let CACHE = null, CACHE_TS = 0;
 
 async function fetchScores() {
@@ -281,6 +267,9 @@ async function fetchScores() {
 
       const events = (data.events || []).slice();
       for (const ev of events) {
+        const seasonType = safe(ev, "season.type", 0);
+        if (seasonType === 1) continue; // skip preseason
+
         const comp = safe(ev, "competitions.0", null);
         if (!comp) continue;
         const away = (comp.competitors || []).find(t => t.homeAway === "away");
@@ -288,6 +277,12 @@ async function fetchScores() {
         if (!away || !home) continue;
 
         const iso = ev.date || comp.date || "";
+        if (!iso) continue;
+
+        const ts = pstTimestamp(iso);
+        const daysOut = (ts - Date.now()) / 86400000;
+        if (daysOut > 30) continue; // skip >30 days out
+
         const kickoff = iso ? formatPST(iso) : "";
 
         const status = safe(comp, "status.type", {});
@@ -318,7 +313,7 @@ async function fetchScores() {
         const homeAbbr = (safe(home, "team.abbreviation", safe(home, "team.displayName", "")) || "").toUpperCase();
         const awayScore = safe(away, "score", "");
         const homeScore = safe(home, "score", "");
-        const isPlayoff = safe(ev, "season.type", 0) === 3;
+        const isPlayoff = seasonType === 3;
         const round = isPlayoff ? safe(comp, "notes.0.headline", safe(ev, "league.name", "Playoffs")) : "";
 
         const item = {
@@ -328,13 +323,21 @@ async function fetchScores() {
           round,
           iso,
           kickoff,
-          networks: networkNames,
+          networks: [],
+          rawNetworks: networkNames,
           away: { abbr: awayAbbr, logo: awayLogo, score: awayScore },
           home: { abbr: homeAbbr, logo: homeLogo, score: homeScore },
           isLive,
           statusText,
           statusDetail
         };
+
+        const stateCode = gameState(item);
+        if (stateCode === 0 && networkNames.length) {
+          item.networks = networkNames.slice(); // future game with networks
+        } else {
+          item.networks = []; // hide for live/final or no data
+        }
 
         if (isPlayoff) {
           playoffGroups[round] = playoffGroups[round] || [];
@@ -378,10 +381,6 @@ async function fetchScores() {
   return dedup;
 }
 
-/* ===========================
-   Rendering & flash detection
-   =========================== */
-
 const rail = document.getElementById('rail');
 let previousScoreMap = new Map();
 
@@ -410,7 +409,7 @@ function createPill(item) {
   if (item.isLive) {
     sub.textContent = item.statusText || 'LIVE';
   } else {
-    sub.textContent = item.kickoff || item.statusText || (item.networks && item.networks[0]) || '';
+    sub.textContent = item.kickoff || item.statusText || (item.rawNetworks && item.rawNetworks[0]) || '';
   }
   score.appendChild(sub);
   pill.appendChild(score);
@@ -488,10 +487,6 @@ function detectScoreChanges(list) {
   previousScoreMap = newMap;
   return changedKeys;
 }
-
-/* ===========================
-   Scrolling engine
-   =========================== */
 
 let raf = null;
 let lastTs = null;
@@ -580,10 +575,6 @@ function rebuildRail(list) {
   const frag = buildRailFragment(list);
   rail.appendChild(frag);
 }
-
-/* ===========================
-   Update loop
-   =========================== */
 
 async function updateAndRun() {
   try {
