@@ -1,451 +1,245 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Sports Scores Ticker (PST, Broadcast Grade)</title>
-<meta name="viewport" content="width=device-width,initial-scale=1">
-
+<meta charset="utf-8" />
+<title>NFL on FOX — Retro Broadcast Ticker</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;700&family=Roboto+Condensed:wght@400;700&display=swap" rel="stylesheet">
 <style>
-html, body {
-  margin: 0;
-  padding: 0;
-  background: transparent;
-  overflow: hidden;
-  font-family: Arial, Helvetica, sans-serif;
+:root{
+  --height:86px;                 /* ticker bar height */
+  --padding-y:8px;
+  --pill-gap:22px;
+  --font-base:24px;
+  --stripe-w:8px;
+  --speed-px-per-sec:140;
+  --bg: rgba(0,0,0,0.30);
+  --fox-navy: #05204a;           /* FOX deep navy */
+  --fox-gold: #ffb81c;           /* FOX gold accent */
+  --pill-bg: rgba(255,255,255,0.03);
+  --shadow: rgba(0,0,0,0.30);
 }
 
-/* Ticker container */
-.ticker-wrap {
-  position: fixed;
-  bottom: 0;
-  width: 100%;
-  height: 80px;
-  background: rgba(0,0,0,0.35);
-  display: flex;
-  align-items: center;
-  overflow: hidden;
-  transition: opacity 0.8s ease;
-  padding-left: 12px;
-  box-sizing: border-box;
+/* base */
+html,body{height:100%; margin:0; padding:0; background:transparent; font-family:"Oswald", "Roboto Condensed", Arial, sans-serif; -webkit-font-smoothing:antialiased;}
+.ticker-wrap{
+  position:fixed; left:0; right:0; bottom:0;
+  height:var(--height);
+  display:flex; align-items:center;
+  padding:var(--padding-y) 18px;
+  box-sizing:border-box;
+  background:var(--bg);
+  overflow:hidden; z-index:9999;
+  border-top:1px solid rgba(255,255,255,0.03);
 }
 
-.ticker-wrap.hidden {
-  opacity: 0;
-  pointer-events: none;
+/* moving rail */
+.ticker { display:flex; align-items:center; gap:var(--pill-gap); white-space:nowrap; will-change:transform; }
+
+/* pill */
+.game-pill{
+  display:inline-flex;
+  align-items:center;
+  gap:12px;
+  padding:10px 14px;
+  min-height: calc(var(--height) - (var(--padding-y) * 2));
+  background:var(--pill-bg);
+  border-radius:4px;
+  color:#fff;
+  box-shadow:0 6px 14px var(--shadow);
+  font-size:var(--font-base);
+  border-left: 6px solid rgba(255,255,255,0.03);
 }
 
-.ticker {
-  white-space: nowrap;
-  padding-left: 100%;
-  font-size: 28px; /* original size */
-  color: white;
-  opacity: 0;
+/* FOX left stripe (thicker, navy) */
+.game-pill .league-stripe{
+  width:var(--stripe-w); height: calc(var(--height) - 28px); border-radius:2px; margin-right:8px;
+  background:var(--fox-navy);
 }
 
-.scroll {
-  animation:
-    fadeIn 1.5s ease forwards,
-    scroll 70s linear forwards,
-    fadeOut 1.5s ease forwards;
-  animation-delay: 0s, 0s, 68.5s;
-}
+/* team block */
+.team{ display:flex; align-items:center; gap:8px; min-width:120px; }
+.team .logo{ width:30px; height:22px; object-fit:contain; display:inline-block; }
+.team .abbr{ font-weight:700; letter-spacing:0.02em; font-size:0.98em; }
 
-@keyframes scroll {
-  from { transform: translateX(0); }
-  to { transform: translateX(-100%); }
-}
+/* score block — tabular numbers for consistent width */
+.score{ display:flex; align-items:center; gap:8px; font-weight:700; font-variant-numeric:tabular-nums; font-feature-settings:"tnum"; }
+.score .num{ min-width:40px; text-align:center; display:inline-block; font-size:1.05em; }
 
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-@keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+/* status block — LIVE badge + text */
+.status{ display:flex; align-items:center; gap:10px; min-width:170px; text-transform:uppercase; font-size:0.78em; letter-spacing:0.06em; opacity:0.94; }
+.live-badge{ display:inline-flex; align-items:center; gap:8px; padding:6px 8px; border-radius:8px; background:rgba(0,0,0,0.16); font-weight:700; color:var(--fox-gold); }
+.live-dot{ width:12px; height:12px; border-radius:50%; background:var(--fox-gold); box-shadow:0 0 8px rgba(255,184,28,0.22); animation:livePulse 1.4s infinite; }
+@keyframes livePulse{ 0%{transform:scale(1)}50%{transform:scale(1.25)}100%{transform:scale(1)} }
 
-/* LIVE badge */
-.live {
-  color: #00ff7f;
-  font-weight: bold;
-  animation: livePulse 1.6s infinite;
-}
+/* round pill */
+.round-pill{ display:inline-flex; align-items:center; gap:10px; padding:10px 14px; border-radius:6px; font-weight:700; font-size:0.95em; min-height:calc(var(--height) - 18px); background:linear-gradient(135deg, rgba(255,255,255,0.02), rgba(0,0,0,0.06)); color:#fff; box-shadow:0 6px 14px var(--shadow); }
+.round-icon{ width:36px; height:28px; background:rgba(255,255,255,0.04); border-radius:6px; display:inline-flex; align-items:center; justify-content:center; }
 
-@keyframes livePulse {
-  0% { text-shadow: 0 0 0 rgba(0,255,127,0); }
-  50% { text-shadow: 0 0 8px rgba(0,255,127,0.35); }
-  100% { text-shadow: 0 0 0 rgba(0,255,127,0); }
-}
+/* separator */
+.separator{ width:10px; height:calc(var(--height) - 36px); background:linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02)); border-radius:2px; box-shadow:inset 0 -1px rgba(0,0,0,0.25); margin:0 2px; }
 
-/* Retro ESPN/FOX-style wide premium separator */
-.separator {
-  display: inline-block;
-  width: 12px;
-  height: 60px; /* matches pill height */
-  margin: 0 26px;
-  background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(255,255,255,0.35));
-  border-radius: 6px;
-  box-shadow:
-    0 6px 18px rgba(0,0,0,0.55),
-    0 0 14px rgba(255,255,255,0.18) inset;
-  vertical-align: middle;
-  transform: translateY(2px);
-}
+/* responsiveness & reduced motion */
+@media (max-width:720px){ :root{ --font-base:18px; --pill-gap:12px; --stripe-w:6px; } .team{ min-width:90px } .status{ min-width:110px } }
+@media (prefers-reduced-motion:reduce){ .ticker{ animation:none !important } }
 
-/* Team logos (15% larger) */
-.team-logo {
-  height: 22px;
-  transform: scale(1.15);
-  transform-origin: center;
-  display: inline-block;
-  vertical-align: middle;
-  margin-right: 6px;
-}
-.team-logo.right {
-  margin-left: 6px;
-  margin-right: 0;
-}
-
-/* GAME PILL — 28px text, matched height */
-.game-pill {
-  padding: 10px 16px;
-  border-radius: 10px;
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  color: #fff;
-  font-size: 28px; /* match original */
-  min-height: 60px; /* matches separator */
-  box-shadow: 0 6px 18px rgba(0,0,0,0.35);
-  line-height: 1;
-}
-
-/* ROUND PILL — same size as game pill */
-.round-pill {
-  padding: 10px 16px;
-  border-radius: 10px;
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 28px; /* match game pill */
-  font-weight: 700;
-  color: #fff;
-  min-height: 60px;
-  margin: 0 10px;
-  box-shadow: 0 6px 18px rgba(0,0,0,0.35);
-}
-
-/* Round emblem — scaled to match logos */
-.round-pill .round-icon {
-  width: 36px;
-  height: 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 6px;
-  flex: 0 0 36px;
-  background: rgba(255,255,255,0.12);
-  box-shadow: inset 0 -2px 6px rgba(0,0,0,0.25);
-}
-
-/* Round color themes */
-.round-wildcard { background: linear-gradient(135deg,#2b8cff,#1a6bff); }
-.round-divisional { background: linear-gradient(135deg,#ff7a2b,#ff4b1a); }
-.round-conference { background: linear-gradient(135deg,#7b2bff,#4b1aff); }
-.round-super { background: linear-gradient(135deg,#ffd700,#ffb400); }
-
-img.team-logo { object-fit: contain; }
 </style>
 </head>
-
 <body>
-<div class="ticker-wrap" id="tickerWrap">
-  <div class="ticker" id="ticker">Loading…</div>
+<div class="ticker-wrap" id="tickerWrap" aria-live="polite" role="region" aria-label="FOX-style ticker">
+  <div id="ticker" class="ticker" aria-hidden="false">Loading…</div>
 </div>
 
 <script>
 /* CONFIG */
-const PAUSE_BETWEEN_LOOPS = 3000;
+const PIXELS_PER_SECOND = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--speed-px-per-sec')) || 140;
+const PAUSE_BETWEEN_LOOPS = 2200;
 const leagues = [
-  { name: "NFL", url: "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard" },
-  { name: "NBA", url: "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard" },
-  { name: "MLB", url: "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard" },
-  { name: "NHL", url: "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard" }
+  { name: "NFL", url: "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard", color:"#05204a" },
+  { name: "NBA", url: "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard", color:"#05204a" },
+  { name: "MLB", url: "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard", color:"#05204a" },
+  { name: "NHL", url: "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard", color:"#05204a" }
 ];
-const leagueColors = {
-  NFL: "#013369",
-  NBA: "#17408B",
-  MLB: "#002D72",
-  NHL: "#111111"
-};
-
-/* HELPERS */
-function safe(o, p, f = "") {
-  try {
-    return p.split(".").reduce((x, k) => (x && x[k] !== undefined ? x[k] : undefined), o) ?? f;
-  } catch {
-    return f;
-  }
-}
-
-/* FORCE PACIFIC TIME (A1: real PST from ESPN UTC) */
-function pstTimestamp(input) {
-  try {
-    const iso = typeof input === "string" ? input : new Date(input).toISOString();
-    return new Date(
-      new Date(iso).toLocaleString("en-US", { timeZone: "America/Los_Angeles" })
-    ).getTime();
-  } catch {
-    return 0;
-  }
-}
-
-function formatPST(iso) {
-  try {
-    const d = new Date(
-      new Date(iso).toLocaleString("en-US", { timeZone: "America/Los_Angeles" })
-    );
-    return d.toLocaleString("en-US", {
-      month: "numeric",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true
-    }).replace(",", "");
-  } catch {
-    return "";
-  }
-}
-
-function imgOrPlaceholder(src, alt = "", right = false) {
-  if (!src) {
-    return `<span class="team-logo${right ? " right" : ""}">
-      <svg width="28" height="22" viewBox="0 0 28 22" xmlns="http://www.w3.org/2000/svg">
-        <rect width="28" height="22" rx="4" fill="#444"/>
-      </svg>
-    </span>`;
-  }
-  return `<img src="${src}" class="team-logo${right ? " right" : ""}" alt="${alt}">`;
-}
-
-/* ROUND META */
-function roundMeta(t) {
-  t = (t || "").toLowerCase();
-  if (t.includes("wild")) return { cls: "round-wildcard", label: "Wild Card" };
-  if (t.includes("divis")) return { cls: "round-divisional", label: "Divisional" };
-  if (t.includes("conf")) return { cls: "round-conference", label: "Conference" };
-  if (t.includes("super")) return { cls: "round-super", label: "Super Bowl" };
-  return { cls: "round-wildcard", label: t || "Playoffs" };
-}
-
-function buildRoundPill(text) {
-  const m = roundMeta(text);
-  const emblem = `<svg width="36" height="28" viewBox="0 0 36 28" xmlns="http://www.w3.org/2000/svg">
-    <rect width="36" height="28" rx="6" fill="rgba(255,255,255,0.12)"/>
-    <g transform="translate(8,6)" fill="white" opacity="0.95">
-      <circle cx="5" cy="5" r="4"></circle>
-      <rect x="14" y="3" width="10" height="6" rx="2"></rect>
-    </g>
-  </svg>`;
-  return `<span class="round-pill ${m.cls}"><span class="round-icon">${emblem}</span>${m.label}</span>`;
-}
-
-/* FETCH WITH FALLBACK */
-async function fetchJson(url) {
-  try {
-    const r = await fetch(url, { cache: "no-store" });
-    if (r.ok) return r.json();
-  } catch {}
-  try {
-    const r2 = await fetch("https://api.allorigins.win/raw?url=" + encodeURIComponent(url));
-    if (r2.ok) return r2.json();
-  } catch {}
-  return null;
-}
-
-/* MAIN FETCH */
-let LAST = null, TS = 0;
 const CACHE_TTL = 30000;
 
-async function fetchScores() {
-  const now = Date.now();
-  if (LAST && (now - TS) < CACHE_TTL) {
-    startTicker(buildTickerHtml(LAST));
-    return;
+/* helpers */
+function safe(o, p, f = undefined){ return p.split('.').reduce((x,k)=> (x && x[k] !== undefined ? x[k] : undefined), o) ?? f; }
+function formatPST(iso){ if(!iso) return ''; try{ const d=new Date(iso); const local=new Date(d.toLocaleString('en-US',{timeZone:'America/Los_Angeles'})); return local.toLocaleString('en-US',{ month:'numeric', day:'numeric', hour:'numeric', minute:'2-digit', hour12:true }).replace(',', ''); }catch{ return ''; } }
+async function fetchJson(url){ try{ const r=await fetch(url,{cache:'no-store'}); if(r.ok) return r.json(); }catch{} try{ const r2=await fetch("https://api.allorigins.win/raw?url="+encodeURIComponent(url)); if(r2.ok) return r2.json(); }catch{} return null; }
+
+/* build DOM nodes */
+function buildRoundPillNode(text){ const n=document.createElement('span'); n.className='round-pill'; const ic=document.createElement('span'); ic.className='round-icon'; ic.innerHTML=`<svg width="32" height="20" viewBox="0 0 32 20" xmlns="http://www.w3.org/2000/svg"><rect width="32" height="20" rx="4" fill="rgba(255,255,255,0.04)"/></svg>`; const t=document.createElement('span'); t.textContent=text||'Playoffs'; n.appendChild(ic); n.appendChild(t); return n; }
+
+function buildGameNode(it){
+  const pill=document.createElement('span'); pill.className='game-pill';
+  const stripe=document.createElement('span'); stripe.className='league-stripe'; stripe.style.background=it.leagueColor||'#05204a'; pill.appendChild(stripe);
+
+  // away
+  const away=document.createElement('span'); away.className='team';
+  const aLogo=document.createElement(it.away.logo ? 'img' : 'span'); if(it.away.logo){ aLogo.src=it.away.logo; aLogo.alt=it.away.abbr||''; aLogo.className='logo'; } else { aLogo.innerHTML=`<svg width="30" height="22" viewBox="0 0 30 22" xmlns="http://www.w3.org/2000/svg"><rect width="30" height="22" rx="3" fill="#444"/></svg>`; aLogo.className='logo'; }
+  away.appendChild(aLogo);
+  const aAb=document.createElement('span'); aAb.className='abbr'; aAb.textContent=it.away.abbr||''; away.appendChild(aAb);
+  pill.appendChild(away);
+
+  // score
+  const score=document.createElement('span'); score.className='score';
+  const aNum=document.createElement('span'); aNum.className='num'; aNum.textContent=(it.away.score!==''?it.away.score:'-');
+  const dash=document.createElement('span'); dash.textContent='–';
+  const hNum=document.createElement('span'); hNum.className='num'; hNum.textContent=(it.home.score!==''?it.home.score:'-');
+  score.appendChild(aNum); score.appendChild(dash); score.appendChild(hNum);
+  pill.appendChild(score);
+
+  // home
+  const home=document.createElement('span'); home.className='team';
+  const hAb=document.createElement('span'); hAb.className='abbr'; hAb.textContent=it.home.abbr||'';
+  home.appendChild(hAb);
+  const hLogo=document.createElement(it.home.logo ? 'img' : 'span'); if(it.home.logo){ hLogo.src=it.home.logo; hLogo.alt=it.home.abbr||''; hLogo.className='logo'; } else { hLogo.innerHTML=`<svg width="30" height="22" viewBox="0 0 30 22" xmlns="http://www.w3.org/2000/svg"><rect width="30" height="22" rx="3" fill="#444"/></svg>`; hLogo.className='logo'; }
+  home.appendChild(hLogo);
+  pill.appendChild(home);
+
+  // status
+  const st=document.createElement('span'); st.className='status';
+  if(it.isLive){
+    const live=document.createElement('span'); live.className='live-badge';
+    const dot=document.createElement('span'); dot.className='live-dot';
+    live.appendChild(dot);
+    const t=document.createElement('span'); t.textContent='LIVE';
+    live.appendChild(t);
+    st.appendChild(live);
   }
+  const statusText=document.createElement('span'); statusText.textContent=it.statusText || it.kickoff || '';
+  st.appendChild(statusText);
+  if(it.network){ const net=document.createElement('span'); net.textContent=` • ${it.network}`; net.style.opacity=0.88; st.appendChild(net); }
+  pill.appendChild(st);
 
-  const segments = [];
-  const playoffGroups = {};
+  return pill;
+}
 
-  for (const lg of leagues) {
-    try {
-      const data = await fetchJson(lg.url);
-      if (!data) continue;
-
-      const events = (data.events || []).filter(e =>
-        [2, 3].includes(safe(e, "season.type", 0))
-      );
-
-      for (const ev of events) {
-        const comp = safe(ev, "competitions.0", null);
-        if (!comp) continue;
-
-        const away = (comp.competitors || []).find(t => t.homeAway === "away");
-        const home = (comp.competitors || []).find(t => t.homeAway === "home");
-        if (!away || !home) continue;
-
-        const iso = ev.date || comp.date;
-        const kickoff = iso ? formatPST(iso) : "";
-
-        const status = safe(comp, "status.type", {});
-        const state = safe(status, "state", "");
-        const isLive = state === "in";
-
-        const statusText = isLive
-          ? "LIVE"
-          : (safe(status, "shortDetail", "") || safe(status, "type.text", "") || "");
-
-        /* 3-network limit */
-        const broadcasts = safe(comp, "broadcasts", []) || safe(ev, "broadcasts", []) || [];
-        let networkObj =
-          broadcasts.find(b => b.market === "national") ||
-          broadcasts[0] ||
-          null;
-
-        let networkNames = [];
-        if (networkObj && Array.isArray(networkObj.names)) {
-          networkNames = networkObj.names.slice(0, 3);
-        } else if (networkObj && networkObj.name) {
-          networkNames = [networkObj.name];
-        }
-        const network = networkNames.join(", ");
-
-        const leagueColor = leagueColors[lg.name] || "#222";
-
-        const awayLogo = safe(away, "team.logo", safe(away, "team.logos.0.href", ""));
-        const homeLogo = safe(home, "team.logo", safe(home, "team.logos.0.href", ""));
-        const awayAbbr = safe(away, "team.abbreviation", safe(away, "team.displayName", "")).toUpperCase();
-        const homeAbbr = safe(home, "team.abbreviation", safe(home, "team.displayName", "")).toUpperCase();
-
-        const awayScore = safe(away, "score", "");
-        const homeScore = safe(home, "score", "");
-
-        const isPlayoff = safe(ev, "season.type", 0) === 3;
-        const round = isPlayoff ? safe(comp, "notes.0.headline", safe(ev, "league.name", "Playoffs")) : "";
-
-        const item = {
-          league: lg.name,
-          leagueColor,
-          isPlayoff,
-          round,
-          iso,
-          kickoff,
-          network,
-          away: { abbr: awayAbbr, logo: awayLogo, score: awayScore },
-          home: { abbr: homeAbbr, logo: homeLogo, score: homeScore },
-          isLive,
-          statusText
-        };
-
-        if (isPlayoff) {
-          playoffGroups[round] = playoffGroups[round] || [];
-          playoffGroups[round].push(item);
-        } else {
-          segments.push(item);
-        }
+/* main fetch & assemble */
+let lastTS=0, cached=null;
+async function fetchScores(){
+  const now=Date.now(); if(cached && (now-lastTS)<CACHE_TTL){ runTicker(cached); return; }
+  const segments=[], playoffGroups={};
+  for(const lg of leagues){
+    try{
+      const data=await fetchJson(lg.url); if(!data) continue;
+      const events=(data.events||[]);
+      for(const ev of events){
+        const comp=safe(ev,'competitions.0',null); if(!comp) continue;
+        const away=(comp.competitors||[]).find(t=>t.homeAway==='away'); const home=(comp.competitors||[]).find(t=>t.homeAway==='home'); if(!away||!home) continue;
+        const iso=ev.date||comp.date||'';
+        const kickoff=iso?formatPST(iso):'';
+        const status=safe(comp,'status.type',{}); const state=safe(status,'state',''); const isLive=(state==='in');
+        const statusText=isLive?'LIVE':(safe(status,'shortDetail','')||safe(status,'type.text','')||'');
+        const broadcasts=safe(comp,'broadcasts',[])||safe(ev,'broadcasts',[])||[]; let network='';
+        if(Array.isArray(broadcasts)&&broadcasts.length){ const b=broadcasts.find(b=>b.market==='national')||broadcasts[0]; if(b){ if(Array.isArray(b.names)) network=b.names.slice(0,3).join(', '); else if(b.name) network=b.name; } }
+        const awayLogo=safe(away,'team.logo', safe(away,'team.logos.0.href',''))||''; const homeLogo=safe(home,'team.logo', safe(home,'team.logos.0.href',''))||'';
+        const awayAbbr=(safe(away,'team.abbreviation', safe(away,'team.displayName',''))||'').toUpperCase(); const homeAbbr=(safe(home,'team.abbreviation', safe(home,'team.displayName',''))||'').toUpperCase();
+        const awayScore=(safe(away,'score','')+''); const homeScore=(safe(home,'score','')+'');
+        const isPlayoff = safe(ev,'season.type',0) === 3;
+        const round = isPlayoff ? (safe(comp,'notes.0.headline','')|| safe(ev,'league.name','Playoffs')) : '';
+        const item={ league:lg.name, leagueColor:lg.color, isPlayoff, round, iso, kickoff, network, away:{abbr:awayAbbr,logo:awayLogo,score:awayScore}, home:{abbr:homeAbbr,logo:homeLogo,score:homeScore}, isLive, statusText };
+        if(isPlayoff){ playoffGroups[round]=playoffGroups[round]||[]; playoffGroups[round].push(item); } else segments.push(item);
       }
-    } catch (err) {
-      console.error("fetchScores league error:", lg.name, err);
-    }
+    }catch(e){ console.warn('fetch err', e); }
   }
 
-  const finalList = [];
+  const finalList=[];
+  const rounds=Object.keys(playoffGroups).sort();
+  for(const r of rounds){ const arr=playoffGroups[r].sort((a,b)=>(new Date(a.iso||0)-new Date(b.iso||0))); if(arr.length){ finalList.push({header:r}); finalList.push(...arr); } }
+  const regularSorted = segments.sort((a,b)=>(new Date(a.iso||0)-new Date(b.iso||0)));
+  if(regularSorted.length){ finalList.push({header:'Regular'}); finalList.push(...regularSorted); }
 
-  const rounds = Object.keys(playoffGroups).sort((a, b) => a.localeCompare(b));
-  for (const r of rounds) {
-    const arr = playoffGroups[r].sort((x, y) => pstTimestamp(x.iso) - pstTimestamp(y.iso));
-    finalList.push({ header: r });
-    finalList.push(...arr);
-  }
+  // dedupe
+  const seen=new Set(); const dedup=[];
+  for(const it of finalList){ if(it.header){ dedup.push(it); continue; } const key=`${it.iso}|${it.away.abbr}|${it.home.abbr}`; if(!seen.has(key)){ seen.add(key); dedup.push(it); } }
 
-  const regularSorted = segments.sort((a, b) => pstTimestamp(a.iso) - pstTimestamp(b.iso));
-  if (regularSorted.length) {
-    finalList.push({ header: "Regular" });
-    finalList.push(...regularSorted);
-  }
-
-  const seen = new Set();
-  const deduped = [];
-  for (const it of finalList) {
-    if (it.header) {
-      deduped.push(it);
-      continue;
-    }
-    const key = `${it.iso}|${it.away.abbr}|${it.home.abbr}`;
-    if (!seen.has(key)) {
-      seen.add(key);
-      deduped.push(it);
-    }
-  }
-
-  LAST = deduped;
-  TS = Date.now();
-
-  startTicker(buildTickerHtml(deduped));
+  cached = dedup; lastTS = Date.now();
+  runTicker(dedup);
 }
 
-/* BUILD HTML */
-function buildTickerHtml(list) {
-  if (!list || list.length === 0) return "";
+/* build DOM + measured scroll animation */
+let dynCounter=0;
+function runTicker(list){
+  const wrap=document.getElementById('tickerWrap'), t=document.getElementById('ticker');
+  t.style.animation='none'; t.innerHTML='';
 
-  const out = [];
-  for (const it of list) {
-    if (it.header) {
-      out.push(buildRoundPill(it.header));
-      continue;
-    }
+  if(!list || list.length===0){ t.textContent='No games'; wrap.style.opacity='0.0'; wrap.style.pointerEvents='none'; return; } else { wrap.style.opacity='1'; wrap.style.pointerEvents='auto'; }
 
-    const awayImg = imgOrPlaceholder(it.away.logo, it.away.abbr, false);
-    const homeImg = imgOrPlaceholder(it.home.logo, it.home.abbr, true);
-
-    const scorePart =
-      (it.away.score !== "" || it.home.score !== "") ?
-        `${it.away.score} – ${it.home.score}` :
-        `${it.kickoff}`;
-
-    const networkPart = it.network ? ` • ${it.network}` : "";
-
-    out.push(`
-      <span class="game-pill" style="background:${it.leagueColor};">
-        ${awayImg}
-        <strong>${it.away.abbr}</strong>
-        <span style="opacity:0.95;">${scorePart}</span>
-        <strong>${it.home.abbr}</strong>
-        ${homeImg}
-        <span class="${it.isLive ? "live" : ""}" style="opacity:0.9;">${it.statusText}${networkPart}</span>
-      </span>
-    `);
-  }
-
-  return out.join('<span class="separator"></span>');
-}
-
-/* START TICKER */
-function startTicker(content) {
-  const wrap = document.getElementById("tickerWrap");
-  const t = document.getElementById("ticker");
-
-  if (!content) {
-    wrap.classList.add("hidden");
-    t.className = "ticker";
-    t.innerHTML = "No games available";
-    return;
-  }
-
-  wrap.classList.remove("hidden");
-  t.className = "ticker";
-  t.innerHTML = content;
+  const frag=document.createDocumentFragment();
+  list.forEach((it, idx) => {
+    if(it.header){ frag.appendChild(buildRoundPillNode(it.header)); }
+    else { frag.appendChild(buildGameNode(it)); }
+    if(idx !== list.length-1){ const s=document.createElement('span'); s.className='separator'; frag.appendChild(s); }
+  });
+  t.appendChild(frag);
   void t.offsetWidth;
-  t.classList.add("scroll");
 
-  setTimeout(fetchScores, 70000 + PAUSE_BETWEEN_LOOPS);
+  const wrapW = wrap.clientWidth, contentW = t.scrollWidth;
+  if(contentW <= wrapW){ t.style.transform='translateX(0)'; t.style.justifyContent='center'; setTimeout(()=>{ setTimeout(()=> fetchScores(), PAUSE_BETWEEN_LOOPS); }, PAUSE_BETWEEN_LOOPS); return; }
+
+  const distance = contentW + wrapW;
+  const dur = Math.max(6, Math.round(distance / PIXELS_PER_SECOND));
+  const startX = wrapW;
+  const endX = -contentW;
+  const name = `scroll_${++dynCounter}`;
+  const old = document.getElementById('dyn-ticker-style'); if(old) old.remove();
+  const style = document.createElement('style'); style.id = 'dyn-ticker-style';
+  style.textContent = `@keyframes ${name}{ from{transform:translateX(${startX}px)} to{transform:translateX(${endX}px)} }`;
+  document.head.appendChild(style);
+  t.style.animationName = name;
+  t.style.animationDuration = `${dur}s`;
+  t.style.animationTimingFunction = 'linear';
+  t.style.animationFillMode = 'forwards';
+  t.addEventListener('animationend', function done(){ t.removeEventListener('animationend', done); setTimeout(()=>{ fetchScores(); }, PAUSE_BETWEEN_LOOPS); });
 }
 
+/* bootstrap */
 fetchScores();
+setInterval(()=>fetchScores(), 85_000); // periodic refresh for long-running sessions
+
+/* small helper export */
+function safe(o,p,f){ return safe; }
 </script>
 </body>
 </html>
