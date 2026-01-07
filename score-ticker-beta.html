@@ -1,100 +1,212 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<title>FOX Ticker — OBS Overlay (CSS-only)</title>
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;700&display=swap" rel="stylesheet">
+<meta charset="UTF-8">
+<title>NFL on FOX Style Ticker (OBS)</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+
 <style>
-:root{
-  --base-width:1920;       /* design width */
-  --scale: calc(100vw / var(--base-width)); /* automatic scale to viewport */
-  --height:86px;
-  --padding:10px 18px;
-  --pill-gap:22px;
-  --font-base:24px;
-  --fox-navy:#05204a;
-  --fox-gold:#ffb81c;
-  --pill-bg: rgba(255,255,255,0.03);
-  --shadow: rgba(0,0,0,0.28);
+html, body {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  overflow: hidden;
+  font-family: Arial, Helvetica, sans-serif;
 }
 
-/* ensure body transparent for OBS */
-html,body{ height:100%; margin:0; padding:0; background:transparent; overflow:hidden; }
-.container{
-  transform-origin: left top;
-  transform: scale(var(--scale));
-  width:var(--base-width)px;
-  position:relative;
+/* === BAR === */
+.ticker-wrap {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 64px;
+  background: linear-gradient(
+    to bottom,
+    rgba(20,20,20,0.9),
+    rgba(5,5,5,0.9)
+  );
+  display: flex;
+  align-items: center;
+  overflow: hidden;
 }
 
-/* ticker bar (transparent background by design) */
-.ticker-wrap{
-  position:relative; width:100%; height:var(--height); display:flex; align-items:center;
-  padding:8px 60px; box-sizing:border-box;
+/* === STRIP === */
+.ticker {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  transform: translateX(100%);
+  animation: scroll 65s linear infinite;
+  font-size: 24px;
+  color: #fff;
 }
 
-/* rail holds pills; you can duplicate pills as needed */
-.ticker{ display:flex; flex-wrap:nowrap; gap:var(--pill-gap); align-items:center; }
-
-/* pill style */
-.game-pill{
-  display:inline-flex; align-items:center; gap:12px; padding:10px 14px; min-height:calc(var(--height) - 18px);
-  background:var(--pill-bg); color:#fff; border-radius:4px; box-shadow:0 6px 14px var(--shadow); font-family:"Oswald",sans-serif; font-size:var(--font-base);
-  border-left:6px solid rgba(255,255,255,0.03);
+@keyframes scroll {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(-100%); }
 }
 
-/* stripe */
-.league-stripe{ width:8px; height:44px; background:var(--fox-navy); margin-right:8px; border-radius:2px; }
+/* === GAME BLOCK === */
+.game {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: linear-gradient(
+    to bottom,
+    #1e3a8a,
+    #152c6b
+  );
+  border-radius: 4px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.15);
+  font-weight: bold;
+}
 
-/* team */
-.team{ display:flex; align-items:center; gap:8px; min-width:120px; }
-.logo{ width:30px; height:22px; object-fit:contain; display:inline-block; }
-.abbr{ font-weight:700; font-size:0.98em; }
+/* === TEAMS === */
+.team {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
 
-/* score */
-.score{ display:flex; align-items:center; gap:8px; font-weight:700; font-variant-numeric:tabular-nums; }
-.num{ min-width:40px; text-align:center; }
+.team-logo {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+}
 
-/* status */
-.status{ display:flex; align-items:center; gap:10px; min-width:170px; text-transform:uppercase; font-size:12px; opacity:0.95; }
-.live-badge{ display:inline-flex; flex-shrink:0; align-items:center; gap:8px; padding:6px 8px; background:rgba(0,0,0,0.14); color:var(--fox-gold); border-radius:8px; font-weight:700; }
-.live-dot{ width:12px; height:12px; border-radius:50%; background:var(--fox-gold); box-shadow:0 0 6px rgba(255,184,28,0.22); }
+/* === SCORE === */
+.score {
+  font-weight: 900;
+  letter-spacing: 0.5px;
+}
 
-/* safe scaling hint: keep content centered vertically in OBS source */
-.obs-safe { position:absolute; left:0; right:0; top:0; bottom:0; display:flex; align-items:center; justify-content:center; pointer-events:none; }
+/* === STATUS === */
+.status {
+  font-size: 16px;
+  font-weight: normal;
+  opacity: 0.85;
+}
+
+.live {
+  color: #7CFC00;
+  font-weight: bold;
+}
+
+/* === SEPARATOR === */
+.separator {
+  width: 2px;
+  height: 36px;
+  background: rgba(255,255,255,0.65);
+  margin: 0 18px;
+}
 </style>
 </head>
+
 <body>
-  <div class="container">
-    <div class="ticker-wrap" aria-hidden="false">
-      <div class="ticker" role="list">
-        <!-- Sample pills (replace with your own) -->
-        <span class="game-pill" role="listitem">
-          <span class="league-stripe" style="background:var(--fox-navy)"></span>
-          <span class="team"><img class="logo" src="" alt="BUF"/><span class="abbr">BUF</span></span>
-          <span class="score"><span class="num">24</span><span>–</span><span class="num">17</span></span>
-          <span class="team"><span class="abbr">MIA</span><img class="logo" src="" alt="MIA"/></span>
-          <span class="status"><span class="live-badge"><span class="live-dot"></span><span>LIVE</span></span><span>Q4 8:12</span></span>
-        </span>
 
-        <span class="game-pill" role="listitem">
-          <span class="league-stripe" style="background:var(--fox-navy)"></span>
-          <span class="team"><img class="logo" src="" alt="DAL"/><span class="abbr">DAL</span></span>
-          <span class="score"><span class="num">14</span><span>–</span><span class="num">21</span></span>
-          <span class="team"><span class="abbr">PHI</span><img class="logo" src="" alt="PHI"/></span>
-          <span class="status"><span>Q3 6:42</span></span>
-        </span>
+<div class="ticker-wrap" id="tickerWrap">
+  <div class="ticker" id="ticker">Loading…</div>
+</div>
 
-        <span class="round-pill" style="background:linear-gradient(135deg, rgba(255,255,255,0.02), rgba(0,0,0,0.06))">
-          <span class="round-icon"><svg width="32" height="20" viewBox="0 0 32 20" xmlns="http://www.w3.org/2000/svg"><rect width="32" height="20" rx="4" fill="rgba(255,255,255,0.04)"/></svg></span>
-          Regular
-        </span>
+<script>
+/* ======================
+   ORIGINAL PROXY LOGIC
+   ====================== */
 
-        <!-- duplicate pills to fill the rail if you want repeating scroll via OBS animation -->
+const PAUSE_BETWEEN_LOOPS = 3000;
+const leagues = [
+  { name: "NFL", url: "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard" },
+  { name: "NBA", url: "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard" },
+  { name: "MLB", url: "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard" },
+  { name: "NHL", url: "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard" }
+];
+
+function safe(o, p, f = "") {
+  try { return p.split(".").reduce((x,k)=>x?.[k],o) ?? f; }
+  catch { return f; }
+}
+
+async function fetchJson(url) {
+  try {
+    const r = await fetch(url, { cache: "no-store" });
+    if (r.ok) return r.json();
+  } catch {}
+  try {
+    const r2 = await fetch(
+      "https://api.allorigins.win/raw?url=" + encodeURIComponent(url)
+    );
+    if (r2.ok) return r2.json();
+  } catch {}
+  return null;
+}
+
+/* === BUILD HTML === */
+function buildTickerHtml(list) {
+  const out = [];
+
+  for (const it of list) {
+    const awayImg = it.away.logo
+      ? `<img src="${it.away.logo}" class="team-logo">`
+      : "";
+
+    const homeImg = it.home.logo
+      ? `<img src="${it.home.logo}" class="team-logo">`
+      : "";
+
+    out.push(`
+      <div class="game">
+        <span class="team">${awayImg}${it.away.abbr}</span>
+        <span class="score">${it.away.score}–${it.home.score}</span>
+        <span class="team">${it.home.abbr}${homeImg}</span>
+        <span class="status ${it.isLive ? "live" : ""}">${it.statusText}</span>
       </div>
-    </div>
-    <div class="obs-safe" aria-hidden="true"></div>
-  </div>
+    `);
+  }
+
+  return out.join(`<div class="separator"></div>`);
+}
+
+/* === START === */
+let LAST=null, TS=0, CACHE_TTL=30000;
+
+async function fetchScores() {
+  const now = Date.now();
+  if (LAST && now-TS<CACHE_TTL) return startTicker(buildTickerHtml(LAST));
+
+  const items=[];
+  for (const lg of leagues) {
+    const data = await fetchJson(lg.url);
+    if (!data) continue;
+
+    for (const ev of data.events||[]) {
+      const comp=safe(ev,"competitions.0");
+      if(!comp) continue;
+
+      const away=comp.competitors.find(t=>t.homeAway==="away");
+      const home=comp.competitors.find(t=>t.homeAway==="home");
+
+      items.push({
+        away:{abbr:safe(away,"team.abbreviation"),logo:safe(away,"team.logo"),score:safe(away,"score")},
+        home:{abbr:safe(home,"team.abbreviation"),logo:safe(home,"team.logo"),score:safe(home,"score")},
+        isLive:safe(comp,"status.type.state")==="in",
+        statusText:safe(comp,"status.type.shortDetail","")
+      });
+    }
+  }
+
+  LAST=items; TS=Date.now();
+  startTicker(buildTickerHtml(items));
+}
+
+function startTicker(html) {
+  const t=document.getElementById("ticker");
+  t.innerHTML=html;
+}
+
+fetchScores();
+</script>
+
 </body>
 </html>
