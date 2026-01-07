@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Sports Scores Ticker</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: transparent;
+      overflow: hidden;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    .ticker-wrap {
+      position: fixed;
+      bottom: 0;
+      width: 100%;
+      height: 80px;
+      background: rgba(0,0,0,0.35);
+      display: flex;
+      align-items: center;
+      overflow: hidden;
+      transition: opacity 0.8s ease;
+      padding-left: 12px;
+      box-sizing: border-box;
+    }
+
+    .ticker-wrap.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .ticker {
+      white-space: nowrap;
+      padding-left: 100%;
+      font-size: 28px;
+      color: white;
+      opacity: 0;
+      will-change: transform, opacity;
+    }
+
+    .scroll {
+      animation:
+        fadeIn 1.5s ease forwards,
+        scroll 70s linear forwards,
+        fadeOut 1.5s ease forwards;
+      animation-delay: 0s, 0s, 68.5s;
+    }
+
+    @keyframes scroll {
+      from { transform: translateX(0); }
+      to { transform: translateX(-100%); }
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes fadeOut {
+      from { opacity: 1; }
+      to { opacity: 0; }
+    }
+
+    .live {
+      color: #00ff7f;
+      font-weight: bold;
+      animation: livePulse 1.6s infinite;
+    }
+
+    @keyframes livePulse {
+      0% { text-shadow: 0 0 0 rgba(0,255,127,0.0); }
+      50% { text-shadow: 0 0 8px rgba(0,255,127,0.35); }
+      100% { text-shadow: 0 0 0 rgba(0,255,127,0.0); }
+    }
+
+    .separator {
+      margin: 0 18px;
+      color: white;
+      display: inline-block;
+      vertical-align: middle;
+    }
+
+    /* Team logo sizing: base height + 15% scale */
+    .team-logo {
+      height: 22px;
+      transform: scale(1.15);
+      transform-origin: center;
+      display: inline-block;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+    .team-logo.right {
+      margin-left: 6px;
+      margin-right: 0;
+    }
+
+    /* Small pill tweaks for better legibility */
+    .game-pill {
+      padding: 6px 12px;
+      border-radius: 6px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: #fff;
+      font-size: 18px;
+    }
+
+    /* Header style used inline but defined here for convenience */
+    .round-header {
+      font-weight: 700;
+      margin: 0 12px;
+      color: #fff;
+      display: inline-block;
+      vertical-align: middle;
+      font-size: 20px;
+    }
+
+    /* Hide images that fail to load gracefully */
+    img.team-logo { object-fit: contain; }
+  </style>
+</head>
+<body>
+  <div class="ticker-wrap" id="tickerWrap">
+    <div class="ticker" id="ticker">Loading today’s scores…</div>
+  </div>
+
+  <script>
+    // Configuration
+    const PAUSE_BETWEEN_LOOPS = 3000;
+    const leagues = [
+      { name: "NFL", url: "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard" },
+      { name: "NBA", url: "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard" },
+      { name: "MLB", url: "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard" },
+      { name: "NHL", url: "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard" }
+    ];
+    const leagueColors = {
+      NFL: "#013369",
+      NBA: "#17408B",
+      MLB: "#002D72",
+      NHL: "#111111"
+    };
+
+    // --- helpers ---
+    function safe(obj, path, fallback = "") {
+      try {
+        return path.split(".").reduce((o, k) => (o && o[k] !== undefined ? o[k] : undefined), obj) ?? fallback;
+      } catch {
+        return fallback;
+      }
+    }
+
+    function formatPST(iso) {
+      try {
+        const d = new Date(iso);
+        return d.toLocaleString("en-US", {
+          timeZone: "America/Los_Angeles",
+          month: "numeric",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true
+        }).replace(",", "");
+      } catch {
+        return "";
+      }
+    }
+
+    function imgOrPlaceholder(src, alt = "", isRight = false) {
+      if (!src) {
+        // placeholder wrapped in a span so CSS class applies
+        return `<span class="team-logo${isRight ? " right" : ""}" style="display:inline-block;">
+          <svg width="28" height="18" viewBox="0 0 28 18" xmlns="http://www.w3.org/2000/svg" style="display:block;">
+            <rect width="28" height="18" rx="3" fill="#444"/>
+          </svg>
+        </span>`;
+      }
+      // real image uses the class
+      // add team-logo class and alt for accessibility
+      return `<img src="${src}" class="team-logo${isRight ? " right" : ""}" alt="${alt}">`;
+    }
+
+    // --- resilient fetch with proxy fallback ---
+    async function fetchJsonWithFallback(url) {
+      // try direct
+      try {
+        const r = await fetch(url, { cache: "no-store" });
+        if (r.ok) {
+          const j = await r.json();
+          return { ok: true, json: j, source: "direct" };
+        }
+      } catch (e) {
+        // ignore, try proxy
+      }
+
+      // proxy fallback (allorigins)
+      try {
+        const proxy = "https://api.allorigins.win/raw?url=" + encodeURIComponent(url);
+        const r2 = await fetch(proxy);
+        if (r2.ok) {
+          const j2 = await r2.json();
+          return { ok: true, json: j2, source: "proxy" };
+        }
+      } catch (e) {
+        // final failure
+      }
+
+      return { ok: false };
+    }
+
+    // --- main robust fetch + render ---
+    let LAST_FETCH_TS = 0;
+    let LAST_DATA = null;
+    const CACHE_TTL = 30 * 1000; // 30s cache to avoid duplicate fetches during animation
+
+    async function fetchScores() {
+      const now = Date.now();
+      if (LAST_DATA && (now - LAST_FETCH_TS) < CACHE_TTL) {
+        startTicker(buildTickerHtml(LAST_DATA));
+        return;
+      }
+
+      const segments = [];
+      const playoffGroups = {}; // group by round for playoffs
+
+      for (const league of leagues) {
+        try {
+          const res = await fetchJsonWithFallback(league.url);
+          if (!res.ok || !res.json) continue;
+
+          console.debug('fetch source', league.name, res.source);
+
+          const data = res.json;
+          const events = (data.events || []).filter(e => {
+            // include regular season (2) and postseason (3)
+            return [2, 3].includes(safe(e, "season.type", 0));
+          });
+
+          for (const event of events) {
+            const comp = safe(event, "competitions.0", null);
+            if (!comp) continue;
+
+            const away = (comp.competitors || []).find(t => t.homeAway === "away");
+            const home = (comp.competitors || []).find(t => t.homeAway === "home");
+            if (!away || !home) continue;
+
+            const status = safe(comp, "status.type", {});
+            const isLive = safe(status, "state", "") === "in";
+            const statusText = isLive ? "LIVE" : (safe(status, "shortDetail", "") || safe(status, "type.text", "") || "");
+
+            const iso = event.date || comp.date;
+            const kickoff = iso ? formatPST(iso) : "";
+
+            const network = (safe(comp, "broadcasts", []) || safe(event, "broadcasts", []) || [])
+              .find(b => b.market === "national") || (safe(comp, "broadcasts.0", {}) || safe(event, "broadcasts.0", {}));
+            const networkName = network ? (network.names ? network.names.join(", ") : (network.name || "")) : "";
+
+            const leagueColor = leagueColors[league.name] || "#222";
+
+            const awayLogo = safe(away, "team.logo", safe(away, "team.logos.0.href", ""));
+            const homeLogo = safe(home, "team.logo", safe(home, "team.logos.0.href", ""));
+            const awayAbbr = safe(away, "team.abbreviation", safe(away, "team.displayName", away.team?.name || "")).toUpperCase();
+            const homeAbbr = safe(home, "team.abbreviation", safe(home, "team.displayName", home.team?.name || "")).toUpperCase();
+
+            const awayScore = safe(away, "score", "");
+            const homeScore = safe(home, "score", "");
+
+            const isPlayoff = safe(event, "season.type", 0) === 3;
+            const round = isPlayoff ? (safe(comp, "notes.0.headline", safe(event, "league.name", "Playoffs"))) : "";
+
+            const item = {
+              league: league.name,
+              leagueColor,
+              isPlayoff,
+              round,
+              iso,
+              kickoff,
+              network: networkName,
+              away: { abbr: awayAbbr, logo: awayLogo, score: awayScore },
+              home: { abbr: homeAbbr, logo: homeLogo, score: homeScore },
+              isLive,
+              statusText
+            };
+
+            if (isPlayoff) {
+              playoffGroups[round] = playoffGroups[round] || [];
+              playoffGroups[round].push(item);
+            } else {
+              segments.push(item);
+            }
+          }
+        } catch (err) {
+          console.error("fetchScores league error:", league.name, err);
+        }
+      }
+
+      // Build ordered list: playoffs grouped by round (sorted by date), then regular games by date
+      const finalList = [];
+
+      // add playoff rounds in alphabetical order (stable ordering)
+      const rounds = Object.keys(playoffGroups).sort((a,b) => a.localeCompare(b));
+      for (const r of rounds) {
+        const arr = playoffGroups[r].sort((x,y) => {
+          const tx = x.iso ? new Date(x.iso).getTime() : Infinity;
+          const ty = y.iso ? new Date(y.iso).getTime() : Infinity;
+          return tx - ty;
+        });
+        finalList.push({ header: r });
+        finalList.push(...arr);
+      }
+
+      // add regular games sorted by date
+      const regularSorted = segments.sort((a,b) => {
+        const ta = a.iso ? new Date(a.iso).getTime() : Infinity;
+        const tb = b.iso ? new Date(b.iso).getTime() : Infinity;
+        return ta - tb;
+      });
+      if (regularSorted.length) {
+        finalList.push({ header: "Regular" });
+        finalList.push(...regularSorted);
+      }
+
+      // dedupe by iso + teams
+      const seen = new Set();
+      const deduped = [];
+      for (const it of finalList) {
+        if (it.header) {
+          deduped.push(it);
+          continue;
+        }
+        const key = `${it.iso}|${it.away.abbr}|${it.home.abbr}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          deduped.push(it);
+        }
+      }
+
+      LAST_FETCH_TS = Date.now();
+      LAST_DATA = deduped;
+
+      startTicker(buildTickerHtml(deduped));
+    }
+
+    function buildTickerHtml(list) {
+      if (!list || list.length === 0) return "";
+
+      const parts = [];
+      for (const item of list) {
+        if (item.header) {
+          parts.push(`<span class="round-header">${item.header}</span>`);
+          continue;
+        }
+
+        const liveClass = item.isLive ? "live" : "";
+        const awayImg = imgOrPlaceholder(item.away.logo, item.away.abbr, false);
+        const homeImg = imgOrPlaceholder(item.home.logo, item.home.abbr, true);
+
+        const scorePart = (item.away.score !== "" || item.home.score !== "") ?
+          `${item.away.score} – ${item.home.score}` : `${item.kickoff}`;
+
+        const networkPart = item.network ? ` • ${item.network}` : "";
+
+        parts.push(`
+          <span class="game-pill" style="background:${item.leagueColor};">
+            ${awayImg}
+            <strong>${item.away.abbr}</strong>
+            <span style="opacity:0.95; margin:0 6px;">${scorePart}</span>
+            <strong>${item.home.abbr}</strong>
+            ${homeImg}
+            <span style="margin-left:8px; opacity:0.9;" class="${liveClass}">${item.statusText}${networkPart}</span>
+          </span>
+        `);
+      }
+
+      return parts.join('<span class="separator">|</span>');
+    }
+
+    function startTicker(content) {
+      const ticker = document.getElementById("ticker");
+      const wrap = document.getElementById("tickerWrap");
+
+      if (!content) {
+        wrap.classList.add('hidden');
+        ticker.className = "ticker";
+        ticker.innerHTML = "No games available";
+        return;
+      } else {
+        wrap.classList.remove('hidden');
+      }
+
+      ticker.className = "ticker";
+      ticker.innerHTML = content || "No games available";
+      void ticker.offsetWidth;
+      if (content) ticker.classList.add("scroll");
+      // schedule next fetch after one full scroll + small pause
+      setTimeout(fetchScores, 70000 + PAUSE_BETWEEN_LOOPS);
+    }
+
+    // initial call
+    fetchScores();
+  </script>
+</body>
+</html>
