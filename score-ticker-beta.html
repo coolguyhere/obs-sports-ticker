@@ -13,6 +13,11 @@
   --pill-bg: rgba(255,255,255,0.08);
   --pill-border: rgba(255,255,255,0.22);
 }
+.header-pill .logo {
+  width: calc(var(--bar-h) * 0.45);
+  height: auto;
+  margin-right: 8px;
+}
 
 html,body{
   height:100%; margin:0; padding:0; background:transparent; overflow:hidden;
@@ -166,6 +171,15 @@ img.logo[hidden]{ display:none; }
 
 
 <script>
+let smoothedFps = 60;
+let lastFpsTs = performance.now();
+const pillWidthCache = new WeakMap();
+const LEAGUE_LOGOS = {
+  nfl: "https://a.espncdn.com/i/teamlogos/leagues/500/nfl.png",
+  nba: "https://a.espncdn.com/i/teamlogos/leagues/500/nba.png",
+  mlb: "https://a.espncdn.com/i/teamlogos/leagues/500/mlb.png",
+  nhl: "https://a.espncdn.com/i/teamlogos/leagues/500/nhl.png"
+};
 
 const LEAGUES = [
   { name: "NFL", key: "nfl", url: "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard" },
@@ -420,13 +434,25 @@ function scoreKey(item){
 function createHeaderPill(text, leagueKey){
   const pill = document.createElement("span");
   pill.className = "pill header-pill";
-  pill.textContent = text;
-  pill.classList.add(`league-${leagueKey}`);
   pill.dataset.type = "header";
   pill.dataset.header = text;
   pill.dataset.leagueKey = leagueKey;
+
+  const logo = document.createElement("img");
+  logo.className = "logo";
+  logo.src = LEAGUE_LOGOS[leagueKey] || "";
+  logo.alt = leagueKey.toUpperCase();
+  logo.onerror = () => logo.hidden = true;
+
+  pill.appendChild(logo);
+
+  const label = document.createElement("span");
+  label.textContent = text;
+  pill.appendChild(label);
+
   return pill;
 }
+
 
 function createGamePill(item){
   const pill = document.createElement("span");
@@ -621,12 +647,20 @@ function cssEscape(str){
 
 /* CONTINUOUS LOOP */
 function loopFrame(ts){
+  // FPS smoothing
+  const frameTime = ts - lastFpsTs;
+  lastFpsTs = ts;
+  const currentFps = 1000 / frameTime;
+  smoothedFps = smoothedFps * 0.9 + currentFps * 0.1;
+
   if (!lastTs) lastTs = ts;
   const dt = (ts - lastTs) / 1000;
   lastTs = ts;
 
   // move left
-  x -= SPEED_PX_PER_SEC * dt;
+  const dynamicSpeed = computeDynamicSpeed();
+  x -= dynamicSpeed * dt;
+
   rail.style.transform = `translateX(${x}px)`;
 
   const viewport = document.querySelector(".rail-viewport");
@@ -635,24 +669,31 @@ function loopFrame(ts){
   // --- WRAP‑AROUND CORRECTION (one pill per frame) ---
   const first = rail.firstElementChild;
   if (first) {
+    let width = pillWidthCache.get(first);
+    if (!width) {
+      width = first.getBoundingClientRect().width;
+      pillWidthCache.set(first, width);
+    }
+  
     const firstRect = first.getBoundingClientRect();
-
-    // if the first pill has fully exited left
+    const vpRect = viewport.getBoundingClientRect();
+  
     if (firstRect.right < vpRect.left) {
-      const width = firstRect.width;
-
-      // move it to the end
       rail.appendChild(first);
-
-      // correct scroll offset so the loop stays smooth
       x += width;
       rail.style.transform = `translateX(${x}px)`;
     }
   }
 
+
   requestAnimationFrame(loopFrame);
 }
 
+function computeDynamicSpeed(){
+  const totalWidth = rail.scrollWidth;
+  const targetLoopSeconds = 36; // your preferred loop duration
+  return totalWidth / targetLoopSeconds;
+}
 
 /* MAIN */
 async function bootstrapTicker(){
