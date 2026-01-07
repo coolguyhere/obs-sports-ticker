@@ -2,199 +2,171 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>FOX-style Sports Ticker — Live (ESPN + proxy fallback)</title>
+<title>ESPN Retro-style Score Ticker (Live)</title>
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@600;700&family=Roboto+Condensed:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;700&display=swap" rel="stylesheet">
 <style>
-  /* ===== ROOT / SIZING (auto scale to viewport height) ===== */
   :root{
-    --bar-h: clamp(48px, 7.5vh, 72px);   /* ticker bar height */
-    --font-base: calc(var(--bar-h) * 0.42);
-    --yellow: #ffd200;
-    --scanline-opacity: 0.03;
-    --px-per-sec: 110; /* default pacing; will be used in JS calculations */
-    --team-glow-strength: 6px;
+    --bar-h: clamp(48px, 7.2vh, 72px); /* automatic scale for 720/1080 */
+    --font-base: calc(var(--bar-h) * 0.40);
+    --espn-red: #e31837;
+    --bg: rgba(8,8,8,0.6);
+    --px-per-sec: 130; /* ESPN-esque crawl speed in px/sec; JS uses this */
   }
 
   html,body{
     height:100%; margin:0; padding:0; background:transparent;
     -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+    font-family: 'Roboto Condensed', Arial, Helvetica, sans-serif;
   }
 
-  /* ===== TICKER WRAP (lower third) ===== */
+  /* ===== bar ===== */
   .ticker-wrap{
     position:fixed; left:0; right:0; bottom:0;
     height:var(--bar-h);
     display:flex; align-items:center;
-    padding:6px 14px; box-sizing:border-box;
-    background: linear-gradient(to bottom, rgba(25,25,25,0.78), rgba(10,10,10,0.78));
-    overflow:hidden;
-    transform: translateY(calc(100% + 4px)); /* start hidden (wipe-in) */
-    transition: transform 420ms cubic-bezier(.2,.9,.2,1);
+    padding:6px 12px; box-sizing:border-box;
+    background: linear-gradient(to bottom, rgba(10,10,10,0.75), rgba(0,0,0,0.75));
+    overflow:hidden; border-top:1px solid rgba(255,255,255,0.03);
   }
 
-  /* show after wipe-in */
-  .ticker-wrap.visible{ transform: translateY(0); }
-
-  /* thin FOX yellow accent at top */
+  /* thin ESPN red accent at very top */
   .ticker-wrap::before{
-    content:""; position:absolute; left:0; right:0; top:0; height:4px;
-    background: linear-gradient(90deg, var(--yellow), color-mix(in srgb,var(--yellow), black 8%));
-    z-index:10;
+    content:""; position:absolute; left:0; right:0; top:0; height:3px;
+    background: linear-gradient(90deg, var(--espn-red), color-mix(in srgb, var(--espn-red), black 8%));
   }
 
-  /* subtle scanline overlay for depth */
-  .ticker-wrap::after{
-    content:""; position:absolute; inset:0; pointer-events:none;
-    background: repeating-linear-gradient(
-      to bottom,
-      rgba(255,255,255,var(--scanline-opacity)) 0px,
-      rgba(255,255,255,var(--scanline-opacity)) 1px,
-      rgba(0,0,0,var(--scanline-opacity)) 2px,
-      rgba(0,0,0,var(--scanline-opacity)) 3px
-    );
-    mix-blend-mode: overlay;
-    opacity: 0.35;
-  }
-
-  /* ===== MOVING RAIL ===== */
+  /* ===== moving rail ===== */
   .ticker {
     display:inline-flex; align-items:center;
+    gap:22px;
     white-space:nowrap; will-change:transform;
-    font-family: "Oswald", "Roboto Condensed", Arial, Helvetica, sans-serif;
+    transform: translateX(100%); /* start off right */
     font-size:var(--font-base);
     color:#fff;
-    transform: translateX(100%); /* start offscreen right */
   }
 
-  /* dynamic animation will be applied via JS (name injected) */
-  .ticker.animating { animation-timing-function: linear; animation-fill-mode: forwards; }
+  /* class toggled by JS when animating */
+  .ticker.animating {
+    animation-timing-function: linear;
+    animation-fill-mode: forwards;
+  }
 
-  /* ===== LEAGUE STINGER (intro) ===== */
+  /* minimal ESPN separators */
+  .sep {
+    width:2px; height:48%;
+    background: rgba(255,255,255,0.6);
+    margin: 0 12px;
+  }
+
+  /* ===== game compact block ===== */
+  .game {
+    display:inline-flex; align-items:center;
+    gap:10px;
+    padding: 6px 10px;
+    background: rgba(255,255,255,0.02);
+    border-radius:2px;
+    min-height: calc(var(--bar-h) - 16px);
+    font-weight:700;
+  }
+
   .league {
     display:inline-flex; align-items:center;
-    padding:0.35em 0.75em;
-    margin-right:0.6em;
-    background: rgba(255,255,255,0.06);
-    font-weight:700; letter-spacing:0.12em;
-    text-transform:uppercase; font-size:0.95em;
+    padding: 4px 8px;
+    background: rgba(255,255,255,0.03);
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:0.08em;
     border-radius:3px;
   }
 
-  /* ===== ROUND / EVENT ===== */
   .round {
     display:inline-flex; align-items:center;
-    padding:0.25em 0.65em; margin-right:0.6em;
-    background: rgba(139,0,0,0.88);
-    font-weight:700; text-transform:uppercase; font-size:0.85em;
+    padding: 4px 8px;
+    background: rgba(255,255,255,0.03);
+    font-weight:700;
+    text-transform:uppercase;
     border-radius:3px;
   }
 
-  /* ===== GAME BLOCK ===== */
-  .game {
-    display:inline-flex; align-items:center; gap:0.6em;
-    padding:0.28em 0.7em;
-    background: rgba(255,255,255,0.04);
-    border-radius:3px;
-    min-height: calc(var(--bar-h) - 16px);
-    box-shadow: inset 0 -1px rgba(255,255,255,0.06);
-    border-bottom: 3px solid var(--team-color, rgba(255,255,255,0.08));
-    transition: box-shadow 220ms;
+  /* ===== team / logo (logos increased to be clearly visible) ===== */
+  .team {
+    display:inline-flex; align-items:center; gap:8px; text-transform:uppercase;
+    font-size:0.95em;
+  }
+  .team img {
+    width: calc(var(--bar-h) * 0.55);  /* significantly larger than previous */
+    height: calc(var(--bar-h) * 0.55);
+    object-fit: contain;
+    display:inline-block;
   }
 
-  /* team grouping */
-  .team { display:inline-flex; align-items:center; gap:0.45em; font-weight:700; text-transform:uppercase; }
-
-  .team img { width: calc(var(--bar-h) * 0.35); height: calc(var(--bar-h) * 0.35); object-fit:contain; display:inline-block; }
-
-  /* score area: if special (OT/shootout) use two-line layout */
+  /* ===== score: same visual weight as teams (ESPN compact) ===== */
   .score {
-    font-weight:800; font-variant-numeric: tabular-nums; text-align:center;
-    display:flex; flex-direction:column; justify-content:center; gap:0.12em;
+    display:inline-flex; flex-direction:column; align-items:center; justify-content:center;
+    font-variant-numeric: tabular-nums;
+    line-height:1;
+    min-width: 70px;
   }
-  .score .top { font-size:1.02em; }
-  .score .bottom { font-size:0.71em; opacity:0.9; text-transform:uppercase; }
+  .score .main { font-size:1.05em; font-weight:800; }
+  .score .sub { font-size:0.72em; opacity:0.85; text-transform:uppercase; letter-spacing:0.06em; }
 
-  /* status + network */
-  .status { margin-left:0.4em; font-size:0.78em; opacity:0.92; white-space:nowrap; }
+  /* ===== status (LIVE, FINAL, kickoff) ===== */
+  .status { font-size:0.78em; opacity:0.92; white-space:nowrap; margin-left:6px; }
+  .live { color: var(--espn-red); font-weight:800; }
 
-  .status .live-dot { width:10px; height:10px; border-radius:50%; background:var(--yellow); box-shadow:0 0 8px rgba(255,210,0,0.18); display:inline-block; margin-right:6px; vertical-align:middle; }
-
-  /* separator: slanted FOX-look */
-  .separator {
-    width:14px; height:70%;
-    margin: 0 1.0em;
-    background: linear-gradient(135deg, transparent 40%, rgba(255,255,255,0.86) 40%, rgba(255,255,255,0.86) 60%, transparent 60%);
-    border-radius:2px;
-  }
-
-  /* UP NEXT block (future games) */
-  .up-next {
-    display:inline-flex; align-items:center; gap:0.5em; padding:0.25em 0.6em;
-    background: rgba(0,0,0,0.35); border-radius:3px; font-weight:700; text-transform:uppercase;
-  }
-  .up-next .time { opacity:0.95; font-size:0.92em; }
-
-  /* lower-third wipe-in effect (also used for stinger flash) */
-  .wrap-flash {
-    position:absolute; inset:0; pointer-events:none; opacity:0; transition:opacity 320ms;
-  }
-  .wrap-flash.show { opacity: 0.95; mix-blend-mode:screen; }
-
-  /* reduced motion respect */
-  @media (prefers-reduced-motion: reduce) {
-    .ticker.animating { animation: none !important; transform: translateX(0) !important; }
-    .ticker-wrap { transition: none !important; transform: translateY(0) !important; }
-  }
-
-  /* small screens adjustments */
+  /* ensure small screens are handled */
   @media (max-width:720px){
-    :root { --px-per-sec: 90; }
+    :root { --px-per-sec: 100; }
+    .ticker { gap:12px; }
+    .team img { width: calc(var(--bar-h) * 0.46); height: calc(var(--bar-h) * 0.46); }
+    .score { min-width:56px; }
+  }
+
+  /* reduce motion respect */
+  @media (prefers-reduced-motion: reduce){
+    .ticker.animating { animation:none !important; transform: translateX(0) !important; }
   }
 </style>
 </head>
 <body>
-  <!-- TICKER BAR -->
-  <div class="ticker-wrap" id="tickerWrap" aria-live="polite" role="region" aria-label="Sports scores ticker">
-    <div class="wrap-flash" id="wrapFlash" aria-hidden="true"></div>
-    <div id="ticker" class="ticker" aria-hidden="false"></div>
+  <div class="ticker-wrap" id="tickerWrap" aria-live="polite">
+    <div id="ticker" class="ticker">Loading…</div>
   </div>
 
 <script>
-/* ======================================================
-   LIVE FETCH + PROXY LOGIC (preserved and integrated)
-   - uses ESPN endpoints; falls back to AllOrigins proxy
-   - caches responses briefly
-   - groups playoff rounds, dedupes, sorts by PST kickoff
-   ====================================================== */
+/* ============================
+   ESPN + AllOrigins fetch logic
+   (preserved + integrated)
+   ============================ */
 
-const PAUSE_BETWEEN_LOOPS = 2500;
-const CACHE_TTL = 30_000;
-const PIXELS_PER_SECOND = (() => {
-  const r = getComputedStyle(document.documentElement).getPropertyValue('--px-per-sec');
-  return Number(r) || 110;
+const CACHE_TTL = 30000;
+const PX_PER_SEC = (() => {
+  // pick CSS var if present, otherwise default
+  const v = getComputedStyle(document.documentElement).getPropertyValue('--px-per-sec');
+  return Number(v) || 130;
 })();
 
 const leagues = [
-  { name: "NFL", url: "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard", color: "#003594" },
-  { name: "NBA", url: "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard", color: "#17408B" },
-  { name: "MLB", url: "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard", color: "#002D72" },
-  { name: "NHL", url: "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard", color: "#111111" }
+  { name: "NFL", url: "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard", color:"#e31837" },
+  { name: "NBA", url: "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard", color:"#e31837" },
+  { name: "MLB", url: "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard", color:"#e31837" },
+  { name: "NHL", url: "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard", color:"#e31837" }
 ];
 
 function safe(o, p, f = "") {
-  try { return p.split(".").reduce((x, k) => (x && x[k] !== undefined ? x[k] : undefined), o) ?? f; } catch { return f; }
+  try { return p.split(".").reduce((x,k)=> (x && x[k] !== undefined ? x[k] : undefined), o) ?? f; } catch { return f; }
 }
 
 async function fetchJson(url) {
   try {
     const r = await fetch(url, { cache: "no-store" });
     if (r.ok) return r.json();
-  } catch (e) {}
+  } catch {}
   try {
     const r2 = await fetch("https://api.allorigins.win/raw?url=" + encodeURIComponent(url));
     if (r2.ok) return r2.json();
-  } catch (e) {}
+  } catch {}
   return null;
 }
 
@@ -217,11 +189,11 @@ function formatPST(iso) {
 }
 
 /* Build list by querying ESPN endpoints and grouping playoff rounds */
-let LAST = null, TS = 0;
+let LAST = null, LAST_TS = 0;
 
 async function fetchScores() {
   const now = Date.now();
-  if (LAST && (now - TS) < CACHE_TTL) {
+  if (LAST && (now - LAST_TS) < CACHE_TTL) {
     startTickerFromList(LAST);
     return;
   }
@@ -233,7 +205,6 @@ async function fetchScores() {
     try {
       const data = await fetchJson(lg.url);
       if (!data) continue;
-
       const events = (data.events || []).slice();
 
       for (const ev of events) {
@@ -250,12 +221,9 @@ async function fetchScores() {
         const status = safe(comp, "status.type", {});
         const state = safe(status, "state", "");
         const isLive = state === "in";
+        const statusText = isLive ? "LIVE" : (safe(status, "shortDetail", "") || safe(status, "type.text", "") || "");
+        const statusDetail = (safe(status, "type.detail", "") || "").toUpperCase();
 
-        const statusText = isLive
-          ? "LIVE"
-          : (safe(status, "shortDetail", "") || safe(status, "type.text", "") || "");
-
-        /* broadcasts: keep first 3 names if available */
         const broadcasts = safe(comp, "broadcasts", []) || safe(ev, "broadcasts", []) || [];
         let network = "";
         if (Array.isArray(broadcasts) && broadcasts.length) {
@@ -266,7 +234,7 @@ async function fetchScores() {
           }
         }
 
-        const leagueColor = lg.color || "#222";
+        const leagueColor = lg.color || "#e31837";
         const awayLogo = safe(away, "team.logo", safe(away, "team.logos.0.href", "")) || "";
         const homeLogo = safe(home, "team.logo", safe(home, "team.logos.0.href", "")) || "";
         const awayAbbr = (safe(away, "team.abbreviation", safe(away, "team.displayName", "")) || "").toUpperCase();
@@ -275,9 +243,6 @@ async function fetchScores() {
         const homeScore = safe(home, "score", "");
         const isPlayoff = safe(ev, "season.type", 0) === 3;
         const round = isPlayoff ? safe(comp, "notes.0.headline", safe(ev, "league.name", "Playoffs")) : "";
-
-        // statusDetail heuristic used for OT / Shootout detection
-        const statusDetail = (safe(status, "type.detail", "") || "").toUpperCase();
 
         const item = {
           league: lg.name,
@@ -306,9 +271,7 @@ async function fetchScores() {
     }
   }
 
-  // assemble final list: playoff rounds first (sorted by kickoff) then regular
   const finalList = [];
-
   const rounds = Object.keys(playoffGroups).sort((a, b) => a.localeCompare(b));
   for (const r of rounds) {
     const arr = playoffGroups[r].sort((x, y) => pstTimestamp(x.iso) - pstTimestamp(y.iso));
@@ -322,36 +285,30 @@ async function fetchScores() {
     finalList.push(...regularSorted);
   }
 
-  // dedupe by iso|away|home
+  // dedupe
   const seen = new Set();
   const deduped = [];
   for (const it of finalList) {
-    if (it.header) {
-      deduped.push(it);
-      continue;
-    }
+    if (it.header) { deduped.push(it); continue; }
     const key = `${it.iso}|${it.away.abbr}|${it.home.abbr}`;
-    if (!seen.has(key)) {
-      seen.add(key);
-      deduped.push(it);
-    }
+    if (!seen.has(key)) { seen.add(key); deduped.push(it); }
   }
 
-  LAST = deduped;
-  TS = Date.now();
+  LAST = deduped; LAST_TS = Date.now();
   startTickerFromList(deduped);
 }
 
-/* ======================================================
-   BUILD HTML / RENDERING FUNCTIONS
-   - adds league headers
-   - adds UP NEXT block for future scheduled games
-   - two-line layout when statusDetail indicates OT / SO / SHOOTOUT
-   ====================================================== */
+/* =======================
+   RENDER & SCROLL LOGIC
+   ======================= */
+
+const tickerEl = document.getElementById('ticker');
+const wrapEl = document.getElementById('tickerWrap');
+let dynCounter = 0;
 
 function isFutureGame(item) {
-  if (!item.iso) return false;
-  return pstTimestamp(item.iso) > Date.now() + 60 * 1000; // >1 minute in future
+  if (!item || !item.iso) return false;
+  return pstTimestamp(item.iso) > Date.now() + 60 * 1000;
 }
 
 function isOvertimeType(item) {
@@ -359,198 +316,120 @@ function isOvertimeType(item) {
   return /OT|OVERTIME|SO|SHOOT|SHOOTOUT/.test(d) || /OT/.test(item.statusText || "");
 }
 
-/* Build DOM nodes (safer than innerHTML strings) */
 function buildNodeList(list) {
   const nodes = [];
   let lastLeague = null;
 
-  // Optionally build an "UP NEXT" cluster: take next few future games (limit 3)
-  const futureGames = list.filter(it => it.type !== 'roundHeader' && isFutureGame(it)).slice(0, 3);
-  if (futureGames.length) {
-    const upNext = document.createElement('span');
-    upNext.className = 'up-next';
-    upNext.setAttribute('aria-hidden', 'false');
-    const txt = document.createElement('span'); txt.textContent = 'UP NEXT';
-    txt.style.fontWeight = '900';
-    upNext.appendChild(txt);
-
-    // show first future game's kickoff time
-    const tspan = document.createElement('span'); tspan.className = 'time';
-    tspan.textContent = futureGames[0].kickoff || '';
-    upNext.appendChild(tspan);
-    nodes.push(upNext);
-
-    // separator
-    const sep = document.createElement('span'); sep.className = 'separator';
-    nodes.push(sep);
+  // (OPTIONAL UP NEXT minimized) first few future games as tiny tag if present
+  const future = list.filter(i => !i.header && isFutureGame(i)).slice(0,2);
+  if (future.length) {
+    const up = document.createElement('span'); up.className='league';
+    up.textContent = 'UP NEXT: ' + (future[0].kickoff || future[0].statusText || '');
+    nodes.push(up); nodes.push(createSep());
   }
 
-  // iterate and create league blocks & games
   for (const it of list) {
     if (it.type === 'roundHeader') {
-      // round header line
-      const r = document.createElement('span');
-      r.className = 'round';
-      r.textContent = it.header || it;
-      nodes.push(r);
-      // insert separator
-      nodes.push(createSeparator());
+      const r = document.createElement('span'); r.className='round'; r.textContent = it.header || '';
+      nodes.push(r); nodes.push(createSep());
       continue;
     }
 
-    // if league changed since last appended league header, add league stinger
     if (it.league && it.league !== lastLeague) {
-      const lg = document.createElement('span');
-      lg.className = 'league';
-      lg.textContent = it.league;
-      lg.dataset.league = it.league;
-      nodes.push(lg);
-      nodes.push(createSeparator());
+      const lg = document.createElement('span'); lg.className='league'; lg.textContent = it.league;
+      nodes.push(lg); nodes.push(createSep());
       lastLeague = it.league;
     }
 
-    // game block
-    const g = document.createElement('span');
-    g.className = 'game';
-    g.style.setProperty('--team-color', chooseTeamColor(it) || 'rgba(255,255,255,0.12)');
+    const g = document.createElement('span'); g.className='game';
 
-    // away team
-    const away = document.createElement('span'); away.className = 'team';
-    const awayImg = document.createElement('img'); awayImg.className = 'team-logo';
-    awayImg.src = it.away.logo || '';
+    // away
+    const away = document.createElement('span'); away.className='team';
+    const awayImg = document.createElement('img'); awayImg.className='logo'; awayImg.src = it.away.logo || '';
     awayImg.alt = it.away.abbr || '';
-    awayImg.onerror = () => { awayImg.style.display = 'none'; };
+    awayImg.onerror = () => awayImg.style.display = 'none';
     away.appendChild(awayImg);
     const awayAb = document.createElement('span'); awayAb.textContent = it.away.abbr || '';
     away.appendChild(awayAb);
     g.appendChild(away);
 
-    // score (two-line if overtime/shootout)
-    const score = document.createElement('span'); score.className = 'score';
-    const top = document.createElement('span'); top.className = 'top';
-    top.textContent = `${it.away.score || '-'} – ${it.home.score || '-'}`;
-    score.appendChild(top);
-    if (isOvertimeType(it)) {
-      const bot = document.createElement('span'); bot.className = 'bottom';
-      bot.textContent = (it.statusDetail || it.statusText || '').toUpperCase();
-      score.appendChild(bot);
-    } else {
-      const bot = document.createElement('span'); bot.className = 'bottom';
-      bot.textContent = it.kickoff || '';
-      if (!it.kickoff && !it.statusText) bot.textContent = it.network || '';
-      score.appendChild(bot);
-    }
+    // score (ESPN style single-line unless OT heuristic)
+    const score = document.createElement('span'); score.className='score';
+    const main = document.createElement('span'); main.className='main'; main.textContent = `${it.away.score || '-'} – ${it.home.score || '-'}`;
+    score.appendChild(main);
+    const sub = document.createElement('span'); sub.className='sub';
+    if (isOvertimeType(it)) sub.textContent = (it.statusDetail || it.statusText || '').toUpperCase();
+    else sub.textContent = it.kickoff || it.network || '';
+    score.appendChild(sub);
     g.appendChild(score);
 
-    // home team
-    const home = document.createElement('span'); home.className = 'team';
+    // home
+    const home = document.createElement('span'); home.className='team';
     const homeAb = document.createElement('span'); homeAb.textContent = it.home.abbr || '';
     home.appendChild(homeAb);
-    const homeImg = document.createElement('img'); homeImg.className = 'team-logo';
-    homeImg.src = it.home.logo || '';
+    const homeImg = document.createElement('img'); homeImg.className='logo'; homeImg.src = it.home.logo || '';
     homeImg.alt = it.home.abbr || '';
-    homeImg.onerror = () => { homeImg.style.display = 'none'; };
+    homeImg.onerror = () => homeImg.style.display = 'none';
     home.appendChild(homeImg);
     g.appendChild(home);
 
     // status
-    const st = document.createElement('span'); st.className = 'status';
+    const st = document.createElement('span'); st.className='status';
     if (it.isLive) {
-      const dot = document.createElement('span'); dot.className = 'live-dot';
-      st.appendChild(dot);
-      const lt = document.createElement('span'); lt.textContent = (it.statusText || 'LIVE');
-      st.appendChild(lt);
+      const l = document.createElement('span'); l.className='live'; l.textContent = 'LIVE';
+      st.appendChild(l);
+      const net = document.createElement('span'); net.textContent = ' • ' + (it.network || '');
+      net.style.opacity = '0.9';
+      st.appendChild(net);
     } else {
-      st.textContent = (it.statusText || it.kickoff || it.network || '');
+      st.textContent = it.statusText || it.kickoff || it.network || '';
     }
     g.appendChild(st);
 
     nodes.push(g);
-    nodes.push(createSeparator());
+    nodes.push(createSep());
   }
 
   return nodes;
 }
 
-function chooseTeamColor(it) {
-  // prefer home color; fallback to league color
-  return it.home && it.home.color ? it.home.color : (it.leagueColor || null);
+function createSep() {
+  const s = document.createElement('span'); s.className = 'sep'; return s;
 }
 
-function createSeparator() {
-  const s = document.createElement('span'); s.className = 'separator';
-  return s;
-}
-
-/* ======================================================
-   ANIMATION & LOOP CONTROL (true FOX pacing & pause)
-   - dynamic keyframes created so scrolling speed is px/sec
-   - per-loop league flash & wipe-in
-   ====================================================== */
-
-let dynId = 0;
-const tickerEl = document.getElementById('ticker');
-const wrapEl = document.getElementById('tickerWrap');
-const flashEl = document.getElementById('wrapFlash');
-
-function flashLeagueOnce(league) {
-  if (!league) return;
-  const leagueColor = (leagues.find(l => l.name === league) || {}).color || '#ffffff';
-  flashEl.style.background = `linear-gradient(90deg, ${leagueColor}33, ${leagueColor}22)`;
-  flashEl.classList.add('show');
-  setTimeout(() => flashEl.classList.remove('show'), 420);
-}
-
-function wipeInIfNeeded() {
-  if (!wrapEl.classList.contains('visible')) {
-    wrapEl.classList.add('visible');
-  }
-}
-
+/* start the scroll by measuring widths and injecting dynamic keyframes */
 function startTickerFromList(list) {
-  // clear previous animation
+  // reset
   tickerEl.classList.remove('animating');
   tickerEl.style.animationName = '';
   tickerEl.style.animationDuration = '';
   tickerEl.style.transform = 'translateX(100%)';
   tickerEl.innerHTML = '';
 
-  // build nodes
+  // build content
   const nodes = buildNodeList(list);
   for (const n of nodes) tickerEl.appendChild(n);
 
-  // ensure at least one league flash at start (if present)
-  const firstLeagueNode = tickerEl.querySelector('.league');
-  const leagueName = firstLeagueNode ? firstLeagueNode.dataset.league : null;
-
-  // ensure wipe-in visible
-  wipeInIfNeeded();
-  flashLeagueOnce(leagueName);
-
-  // measure widths after layout
+  // layout & measure
   void tickerEl.offsetWidth;
   const wrapW = wrapEl.clientWidth;
   const contentW = tickerEl.scrollWidth;
 
-  // UP NEXT handling - if only a few items and contentW small, we still want a short loop
+  // if content smaller than wrap: center and refresh after pause
   if (contentW <= wrapW * 1.02) {
-    // center and refresh after short pause
     tickerEl.style.transform = 'translateX(0)';
     setTimeout(() => {
-      // refresh data and restart
-      fetchScores().catch(e => console.error(e));
-    }, 6000 + PAUSE_BETWEEN_LOOPS);
+      fetchScores().catch(e=>console.error(e));
+    }, 6000);
     return;
   }
 
-  // compute duration based on pixels-per-second (true FOX pacing)
-  const pxPerSec = PIXELS_PER_SECOND || 110;
+  // compute duration using px/sec pacing
+  const pxPerSec = PX_PER_SEC || 130;
   const distance = contentW + wrapW;
-  const duration = Math.max(6, Math.round((distance / pxPerSec) * 10) / 10); // seconds, one decimal
-
-  // create dynamic keyframes (unique name)
-  const name = `ticker_scroll_${++dynId}`;
-  const styleId = 'dynamic-ticker-style';
+  const durationSec = Math.max(6, distance / pxPerSec);
+  const name = `es_scroll_${++dynCounter}`;
+  const styleId = 'es_dynamic_style';
   let styleTag = document.getElementById(styleId);
   if (styleTag) styleTag.remove();
 
@@ -567,45 +446,30 @@ function startTickerFromList(list) {
   // apply animation
   tickerEl.classList.add('animating');
   tickerEl.style.animationName = name;
-  tickerEl.style.animationDuration = `${duration}s`;
+  tickerEl.style.animationDuration = `${durationSec}s`;
   tickerEl.style.animationTimingFunction = 'linear';
 
-  // when animation ends -> pause -> reset offscreen -> refresh/pause -> restart
-  let ended = false;
+  // on finish -> reset instantly and refresh
   function onEnd() {
-    if (ended) return;
-    ended = true;
     tickerEl.removeEventListener('animationend', onEnd);
-
-    // small pause (FOX-style)
-    setTimeout(() => {
-      // reset off-screen instantly (remove animation)
+    // slight pause
+    setTimeout(()=>{
       tickerEl.classList.remove('animating');
       tickerEl.style.animationName = '';
       tickerEl.style.transform = 'translateX(100%)';
-
-      // optionally flash league color again before next loop
-      if (leagueName) flashLeagueOnce(leagueName);
-
-      // refresh data after small pause, then start again
-      setTimeout(() => {
-        fetchScores().catch(e => console.error(e));
-      }, PAUSE_BETWEEN_LOOPS);
-    }, 1800); // pause-on-end in ms (FOX pause)
+      // refresh and re-run
+      setTimeout(()=>{ fetchScores().catch(e=>console.error(e)); }, 1500);
+    }, 1200);
   }
-
   tickerEl.addEventListener('animationend', onEnd);
 }
 
-/* ======================================================
-   BOOTSTRAP + periodic refresh
-   ====================================================== */
+/* bootstrap + periodic refresh */
+fetchScores().catch(e=>console.error(e));
+setInterval(()=>fetchScores().catch(e=>console.error(e)), 85_000);
 
-fetchScores().catch(e => console.error(e));
-setInterval(() => fetchScores().catch(e => console.error(e)), 85_000);
-
-/* expose fetchScores for debugging if needed */
-window._fetchScoresForTicker = fetchScores;
+/* expose for debugging */
+window._refreshTicker = fetchScores;
 </script>
 </body>
 </html>
