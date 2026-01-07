@@ -1,360 +1,554 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Sports Scores Ticker (PST Forced)</title>
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="utf-8" />
+<title>ESPN-style Live Ticker (PST, ESPN layout)</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
 
 <style>
-html, body {
-  margin: 0;
-  padding: 0;
-  background: transparent;
-  overflow: hidden;
-  font-family: Arial, Helvetica, sans-serif;
-}
+  :root{
+    --bar-h: clamp(50px, 8vh, 72px);
+    --logo-size: calc(var(--bar-h) * 0.6); /* visibly large logos */
+    --espn-red: #e31837;
+    --pill-bg: rgba(255,255,255,0.08);
+    --pill-border: rgba(255,255,255,0.22);
+    --target-loop-sec: 36; /* target seconds for a full loop (ESPN-ish) */
+  }
 
-/* Ticker container */
-.ticker-wrap {
-  position: fixed;
-  bottom: 0;
-  width: 100%;
-  height: 80px;
-  background: rgba(0,0,0,0.35);
-  display: flex;
-  align-items: center;
-  overflow: hidden;
-  transition: opacity 0.8s ease;
-  padding-left: 12px;
-  box-sizing: border-box;
-}
+  html,body{
+    height:100%; margin:0; padding:0; background:transparent; overflow:hidden;
+    font-family: "Roboto Condensed", "Arial Narrow", Arial, Helvetica, sans-serif;
+    -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+  }
 
-.ticker-wrap.hidden {
-  opacity: 0;
-  pointer-events: none;
-}
+  /* Ticker container */
+  .ticker-wrap{
+    position:fixed; left:0; right:0; bottom:0;
+    height:var(--bar-h);
+    display:flex; align-items:center;
+    padding:6px 12px; box-sizing:border-box;
+    background: linear-gradient(to bottom, rgba(12,12,12,0.95), rgba(4,4,4,0.95));
+    border-top:1px solid rgba(255,255,255,0.04);
+    overflow:hidden;
+  }
 
-.ticker {
-  white-space: nowrap;
-  padding-left: 100%;
-  font-size: 28px; /* original size */
-  color: white;
-  opacity: 0;
-}
+  /* thin ESPN red stripe on top */
+  .ticker-wrap::before{
+    content:""; position:absolute; left:0; right:0; top:0; height:3px;
+    background: linear-gradient(90deg, var(--espn-red), color-mix(in srgb, var(--espn-red), black 6%));
+    z-index:10;
+  }
 
-.scroll {
-  animation:
-    fadeIn 1.5s ease forwards,
-    scroll 70s linear forwards,
-    fadeOut 1.5s ease forwards;
-  animation-delay: 0s, 0s, 68.5s;
-}
+  /* the visible viewport; we will translate the .rail for scrolling */
+  .rail-viewport{
+    width:100%;
+    overflow:visible;
+  }
 
-@keyframes scroll {
-  from { transform: translateX(0); }
-  to { transform: translateX(-100%); }
-}
+  /* rail (will be duplicated for seamless effect) */
+  .rail {
+    display:inline-flex;
+    align-items:center;
+    gap:18px;
+    white-space:nowrap;
+    transform: translateX(0);
+    will-change: transform;
+  }
 
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-@keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+  /* pill/game */
+  .pill {
+    display:inline-flex;
+    align-items:center;
+    gap:12px;
+    padding:6px 12px;
+    min-height: calc(var(--bar-h) - 14px);
+    background: var(--pill-bg);
+    border-left: 3px solid var(--pill-border);
+    border-radius:3px;
+    color: #fff;
+    font-weight:700;
+    box-sizing:border-box;
+    transition: box-shadow 200ms ease;
+  }
 
-/* LIVE badge */
-.live {
-  color: #00ff7f;
-  font-weight: bold;
-  animation: livePulse 1.6s infinite;
-}
+  /* header pill (Wild Card / Divisional / Regular) */
+  .pill.header-pill {
+    background: rgba(255,255,255,0.12);
+    border-left-color: var(--espn-red);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: calc(var(--bar-h) * 0.22);
+  }
 
-@keyframes livePulse {
-  0% { text-shadow: 0 0 0 rgba(0,255,127,0); }
-  50% { text-shadow: 0 0 8px rgba(0,255,127,0.35); }
-  100% { text-shadow: 0 0 0 rgba(0,255,127,0); }
-}
+  .pill .team {
+    display:inline-flex; align-items:center; gap:8px; text-transform:uppercase;
+    font-size: calc(var(--bar-h) * 0.28);
+  }
 
-/* PREMIUM separator */
-.separator {
-  display: inline-block;
-  width: 5px;
-  height: 58px; /* matches pill height */
-  margin: 0 22px;
-  background: linear-gradient(180deg, rgba(255,255,255,0.95), rgba(255,255,255,0.45));
-  border-radius: 5px;
-  box-shadow: 0 6px 18px rgba(0,0,0,0.45), 0 0 10px rgba(255,255,255,0.08) inset;
-  vertical-align: middle;
-  transform: translateY(2px);
-}
+  .pill img.logo {
+    width: var(--logo-size);
+    height: var(--logo-size);
+    object-fit: contain;
+    display:block;
+  }
 
-/* Team logos (15% larger) */
-.team-logo {
-  height: 22px;
-  transform: scale(1.15);
-  transform-origin: center;
-  display: inline-block;
-  vertical-align: middle;
-  margin-right: 6px;
-}
-.team-logo.right {
-  margin-left: 6px;
-  margin-right: 0;
-}
+  .pill .score {
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    font-variant-numeric: tabular-nums;
+    line-height:1;
+  }
+  .pill .score .main { font-size: calc(var(--bar-h) * 0.28); font-weight:900; }
+  .pill .score .sub { font-size: calc(var(--bar-h) * 0.16); opacity:0.92; text-transform:uppercase; }
 
-/* GAME PILL — 28px text, matched height */
-.game-pill {
-  padding: 10px 16px;
-  border-radius: 10px;
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  color: #fff;
-  font-size: 28px; /* match original */
-  min-height: 58px; /* matches separator */
-  box-shadow: 0 6px 18px rgba(0,0,0,0.35);
-  line-height: 1;
-}
+  .pill .status {
+    margin-left:10px;
+    font-size: calc(var(--bar-h) * 0.18);
+    opacity:0.9;
+    white-space:nowrap;
+  }
 
-/* ROUND PILL — same size as game pill */
-.round-pill {
-  padding: 10px 16px;
-  border-radius: 10px;
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 28px; /* match game pill */
-  font-weight: 700;
-  color: #fff;
-  min-height: 58px;
-  margin: 0 10px;
-  box-shadow: 0 6px 18px rgba(0,0,0,0.35);
-}
+  /* FINAL red bug */
+  .pill .final {
+    margin-left:8px;
+    padding:3px 7px;
+    background: var(--espn-red);
+    color:white;
+    font-weight:900;
+    font-size: calc(var(--bar-h) * 0.16);
+    border-radius:3px;
+  }
 
-/* Round emblem — scaled to match logos */
-.round-pill .round-icon {
-  width: 36px;
-  height: 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 6px;
-  flex: 0 0 36px;
-  background: rgba(255,255,255,0.12);
-  box-shadow: inset 0 -2px 6px rgba(0,0,0,0.25);
-}
+  /* subtle flash when score changes */
+  .pill.score-flash {
+    box-shadow: 0 6px 18px rgba(0,0,0,0.45), 0 0 14px rgba(255,255,255,0.04) inset;
+    animation: scorePop 900ms ease;
+  }
+  @keyframes scorePop {
+    0% { transform: scale(1.02); background: rgba(255,255,255,0.14); }
+    40% { transform: scale(1.00); background: var(--pill-bg); }
+    100% { transform: scale(1); background: var(--pill-bg); }
+  }
 
-/* Round color themes */
-.round-wildcard { background: linear-gradient(135deg,#2b8cff,#1a6bff); }
-.round-divisional { background: linear-gradient(135deg,#ff7a2b,#ff4b1a); }
-.round-conference { background: linear-gradient(135deg,#7b2bff,#4b1aff); }
-.round-super { background: linear-gradient(135deg,#ffd700,#ffb400); }
+  /* if logo fails, hide gracefully */
+  img.logo[hidden] { display:none; }
 
-img.team-logo { object-fit: contain; }
+  /* reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    .rail { transition: none !important; animation: none !important; }
+  }
 </style>
 </head>
-
 <body>
-<div class="ticker-wrap" id="tickerWrap">
-  <div class="ticker" id="ticker">Loading…</div>
-</div>
+  <div class="ticker-wrap" id="tickerWrap" aria-live="polite">
+    <div class="rail-viewport">
+      <div class="rail" id="rail"></div>
+    </div>
+  </div>
 
 <script>
-/* CONFIG */
-const PAUSE_BETWEEN_LOOPS = 3000;
-const leagues = [
+/* ===========================
+   Config
+   =========================== */
+const TARGET_LOOP_SECONDS = 36; // ESPN-like full loop target
+const MIN_PADDING = 600;        // minimum extra blank px to pad to ensure movement
+const REFRESH_MS = 45_000;      // fetch every 45s
+const LEAGUES = [
   { name: "NFL", url: "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard" },
   { name: "NBA", url: "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard" },
   { name: "MLB", url: "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard" },
   { name: "NHL", url: "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard" }
 ];
-const leagueColors = {
-  NFL: "#013369",
-  NBA: "#17408B",
-  MLB: "#002D72",
-  NHL: "#111111"
-};
+const CACHE_TTL = 30_000;
 
-/* HELPERS */
-function safe(o,p,f=""){try{return p.split(".").reduce((x,k)=>x?.[k],o)??f;}catch{return f;}}
+/* ===========================
+   Helpers: safe, PST conversions, fetch with fallback
+   =========================== */
+function safe(o, p, f = "") {
+  try { return p.split(".").reduce((x, k) => (x && x[k] !== undefined ? x[k] : undefined), o) ?? f; }
+  catch { return f; }
+}
 
-/* FORCE PACIFIC TIME */
-function pstTimestamp(iso) {
+async function fetchJson(url) {
   try {
-    return new Date(
-      new Date(iso).toLocaleString("en-US", { timeZone: "America/Los_Angeles" })
-    ).getTime();
-  } catch {
-    return 0;
-  }
-}
-
-function formatPST(iso){
-  try{
-    const d=new Date(
-      new Date(iso).toLocaleString("en-US",{timeZone:"America/Los_Angeles"})
-    );
-    return d.toLocaleString("en-US",{
-      month:"numeric",
-      day:"numeric",
-      hour:"numeric",
-      minute:"2-digit",
-      hour12:true
-    }).replace(",","");
-  }catch{return"";}
-}
-
-function imgOrPlaceholder(src,alt="",right=false){
-  if(!src){
-    return `<span class="team-logo${right?" right":""}">
-      <svg width="28" height="22"><rect width="28" height="22" rx="4" fill="#444"/></svg>
-    </span>`;
-  }
-  return `<img src="${src}" class="team-logo${right?" right":""}" alt="${alt}">`;
-}
-
-/* ROUND META */
-function roundMeta(t){
-  t=(t||"").toLowerCase();
-  if(t.includes("wild")) return {cls:"round-wildcard",label:"Wild Card"};
-  if(t.includes("divis")) return {cls:"round-divisional",label:"Divisional"};
-  if(t.includes("conf")) return {cls:"round-conference",label:"Conference"};
-  if(t.includes("super")) return {cls:"round-super",label:"Super Bowl"};
-  return {cls:"round-wildcard",label:t||"Playoffs"};
-}
-
-function buildRoundPill(text){
-  const m=roundMeta(text);
-  const emblem=`<svg width="36" height="28" viewBox="0 0 36 28">
-    <rect width="36" height="28" rx="6" fill="rgba(255,255,255,0.12)"/>
-    <g transform="translate(8,6)" fill="white" opacity="0.95">
-      <circle cx="5" cy="5" r="4"></circle>
-      <rect x="14" y="3" width="10" height="6" rx="2"></rect>
-    </g>
-  </svg>`;
-  return `<span class="round-pill ${m.cls}"><span class="round-icon">${emblem}</span>${m.label}</span>`;
-}
-
-/* FETCH WITH FALLBACK */
-async function fetchJson(url){
-  try{const r=await fetch(url);if(r.ok)return r.json();}catch{}
-  try{const r=await fetch("https://api.allorigins.win/raw?url="+encodeURIComponent(url));if(r.ok)return r.json();}catch{}
+    const r = await fetch(url, { cache: "no-store" });
+    if (r.ok) return r.json();
+  } catch (e) { /* ignore */ }
+  try {
+    const r2 = await fetch("https://api.allorigins.win/raw?url=" + encodeURIComponent(url));
+    if (r2.ok) return r2.json();
+  } catch (e) { /* ignore */ }
   return null;
 }
 
-/* MAIN FETCH */
-let LAST=null, TS=0;
-async function fetchScores(){
-  if(LAST && Date.now()-TS<30000){startTicker(buildTickerHtml(LAST));return;}
+/* A1: real PST from ESPN UTC */
+function pstTimestamp(iso) {
+  try {
+    if (!iso) return 0;
+    const d = new Date(iso);
+    const local = new Date(d.toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
+    return local.getTime();
+  } catch { return 0; }
+}
 
-  const seg=[], pg={};
+function formatPST(iso) {
+  try {
+    if (!iso) return "";
+    const d = new Date(iso);
+    const local = new Date(d.toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
+    const base = local.toLocaleString("en-US", {
+      month: "numeric",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true
+    }).replace(",", "");
+    return base + " PST";
+  } catch { return ""; }
+}
 
-  for(const lg of leagues){
-    const data=await fetchJson(lg.url);
-    if(!data) continue;
+/* ===========================
+   Data fetch & assemble
+   =========================== */
+let CACHE = null, CACHE_TS = 0;
 
-    const events=(data.events||[]).filter(e=>[2,3].includes(safe(e,"season.type",0)));
+async function fetchScores() {
+  const now = Date.now();
+  if (CACHE && (now - CACHE_TS) < CACHE_TTL) return CACHE;
 
-    for(const ev of events){
-      const comp=safe(ev,"competitions.0",null);
-      if(!comp) continue;
+  const segments = [];
+  const playoffGroups = {};
 
-      const away=comp.competitors.find(t=>t.homeAway==="away");
-      const home=comp.competitors.find(t=>t.homeAway==="home");
-      if(!away||!home) continue;
+  for (const lg of LEAGUES) {
+    try {
+      const data = await fetchJson(lg.url);
+      if (!data) continue;
 
-      const iso=ev.date||comp.date;
-      const kickoff=formatPST(iso);
+      const events = (data.events || []).slice();
+      for (const ev of events) {
+        const comp = safe(ev, "competitions.0", null);
+        if (!comp) continue;
+        const away = (comp.competitors || []).find(t => t.homeAway === "away");
+        const home = (comp.competitors || []).find(t => t.homeAway === "home");
+        if (!away || !home) continue;
 
-      /* PST LIVE detection */
-      const nowPST=pstTimestamp(Date.now());
-      const startPST=pstTimestamp(iso);
-      const endPST=startPST+3*60*60*1000;
-      const isLive=nowPST>=startPST && nowPST<=endPST;
+        const iso = ev.date || comp.date || "";
+        const kickoff = iso ? formatPST(iso) : "";
 
-      const status=safe(comp,"status.type",{});
-      const statusText=isLive?"LIVE":safe(status,"shortDetail","");
+        const status = safe(comp, "status.type", {});
+        const state = safe(status, "state", "");
+        const isLive = state === "in";
+        const statusText = isLive ? "LIVE" : (safe(status, "shortDetail", "") || safe(status, "type.text", "") || "");
+        const statusDetail = (safe(status, "type.detail", "") || "").toUpperCase();
 
-      const networkObj=(safe(comp,"broadcasts",[])||[]).find(b=>b.market==="national")||safe(comp,"broadcasts.0",{});
-      const network=networkObj?.names?.join(", ")||networkObj?.name||"";
+        const broadcasts = safe(comp, "broadcasts", []) || safe(ev, "broadcasts", []) || [];
+        let network = "";
+        if (Array.isArray(broadcasts) && broadcasts.length) {
+          const b = broadcasts.find(b => b.market === "national") || broadcasts[0];
+          if (b) {
+            if (Array.isArray(b.names)) network = b.names.slice(0, 3).join(", ");
+            else if (b.name) network = b.name;
+          }
+        }
 
-      const item={
-        league:lg.name,
-        leagueColor:leagueColors[lg.name],
-        isPlayoff:safe(ev,"season.type",0)===3,
-        round:safe(comp,"notes.0.headline",""),
-        iso,kickoff,network,
-        away:{abbr:away.team.abbreviation,logo:away.team.logo,score:away.score},
-        home:{abbr:home.team.abbreviation,logo:home.team.logo,score:home.score},
-        isLive,statusText
-      };
+        const awayLogo = safe(away, "team.logo", safe(away, "team.logos.0.href", "")) || "";
+        const homeLogo = safe(home, "team.logo", safe(home, "team.logos.0.href", "")) || "";
+        const awayAbbr = (safe(away, "team.abbreviation", safe(away, "team.displayName", "")) || "").toUpperCase();
+        const homeAbbr = (safe(home, "team.abbreviation", safe(home, "team.displayName", "")) || "").toUpperCase();
+        const awayScore = safe(away, "score", "");
+        const homeScore = safe(home, "score", "");
+        const isPlayoff = safe(ev, "season.type", 0) === 3;
+        const round = isPlayoff ? safe(comp, "notes.0.headline", safe(ev, "league.name", "Playoffs")) : "";
 
-      if(item.isPlayoff){
-        pg[item.round]=pg[item.round]||[];
-        pg[item.round].push(item);
-      } else seg.push(item);
+        const item = {
+          league: lg.name,
+          isPlayoff,
+          round,
+          iso,
+          kickoff,
+          network,
+          away: { abbr: awayAbbr, logo: awayLogo, score: awayScore },
+          home: { abbr: homeAbbr, logo: homeLogo, score: homeScore },
+          isLive,
+          statusText,
+          statusDetail
+        };
+
+        if (isPlayoff) {
+          playoffGroups[round] = playoffGroups[round] || [];
+          playoffGroups[round].push(item);
+        } else {
+          segments.push(item);
+        }
+      }
+    } catch (err) {
+      console.error("League fetch error", lg.name, err);
     }
   }
 
-  const list=[];
-  const rounds=Object.keys(pg).sort();
-  for(const r of rounds){
-    list.push({header:r});
-    list.push(...pg[r].sort((a,b)=>pstTimestamp(a.iso)-pstTimestamp(b.iso)));
+  // combine playoff groups then regulars
+  const result = [];
+  const rounds = Object.keys(playoffGroups).sort();
+  for (const r of rounds) {
+    const arr = playoffGroups[r].sort((a,b) => pstTimestamp(a.iso) - pstTimestamp(b.iso));
+    result.push({ type: 'roundHeader', header: r });
+    result.push(...arr);
+  }
+  const regularSorted = segments.sort((a,b) => pstTimestamp(a.iso) - pstTimestamp(b.iso));
+  if (regularSorted.length) {
+    result.push({ type: 'roundHeader', header: 'Regular' });
+    result.push(...regularSorted);
   }
 
-  if(seg.length){
-    list.push({header:"Regular"});
-    list.push(...seg.sort((a,b)=>pstTimestamp(a.iso)-pstTimestamp(b.iso)));
+  // dedupe by iso/away/home
+  const seen = new Set(); const dedup = [];
+  for (const it of result) {
+    if (it.type === 'roundHeader') { dedup.push(it); continue; }
+    const key = `${it.iso}|${it.away.abbr}|${it.home.abbr}`;
+    if (!seen.has(key)) { seen.add(key); dedup.push(it); }
   }
 
-  LAST=list; TS=Date.now();
-  startTicker(buildTickerHtml(list));
+  CACHE = dedup; CACHE_TS = Date.now();
+  return dedup;
 }
 
-/* BUILD HTML */
-function buildTickerHtml(list){
-  if(!list.length) return "";
-  const out=[];
-  for(const it of list){
-    if(it.header){ out.push(buildRoundPill(it.header)); continue; }
+/* ===========================
+   Rendering (DOM) helpers & flash detection
+   =========================== */
 
-    const awayImg=imgOrPlaceholder(it.away.logo,it.away.abbr,false);
-    const homeImg=imgOrPlaceholder(it.home.logo,it.home.abbr,true);
-    const score=(it.away.score||it.home.score)?`${it.away.score} – ${it.home.score}`:it.kickoff;
-    const net=it.network?` • ${it.network}`:"";
+const rail = document.getElementById('rail');
+let previousScoreMap = new Map(); // key -> "away-home" -> "A-B"
 
-    out.push(`
-      <span class="game-pill" style="background:${it.leagueColor};">
-        ${awayImg}
-        <strong>${it.away.abbr}</strong>
-        <span style="opacity:0.95;">${score}</span>
-        <strong>${it.home.abbr}</strong>
-        ${homeImg}
-        <span class="${it.isLive?"live":""}" style="opacity:0.9;">${it.statusText}${net}</span>
-      </span>
-    `);
-  }
-  return out.join('<span class="separator"></span>');
+function scoreKey(item) {
+  return `${item.away.abbr}|${item.home.abbr}|${item.iso || ''}`;
 }
 
-/* START TICKER */
-function startTicker(content){
-  const wrap=document.getElementById("tickerWrap");
-  const t=document.getElementById("ticker");
+/* create pill node for a single item */
+function createPill(item) {
+  const pill = document.createElement('span');
+  pill.className = 'pill';
+  pill.dataset.key = scoreKey(item);
 
-  if(!content){
-    wrap.classList.add("hidden");
-    t.innerHTML="No games available";
-    return;
+  // away team
+  const away = document.createElement('span'); away.className = 'team';
+  const aLogo = document.createElement('img'); aLogo.className = 'logo'; aLogo.src = item.away.logo || ''; aLogo.alt = item.away.abbr || '';
+  aLogo.onerror = () => aLogo.hidden = true;
+  away.appendChild(aLogo);
+  const aText = document.createElement('span'); aText.textContent = item.away.abbr || '';
+  away.appendChild(aText);
+  pill.appendChild(away);
+
+  // score block
+  const score = document.createElement('span'); score.className = 'score';
+  const main = document.createElement('span'); main.className = 'main'; main.textContent = `${item.away.score || '-'} – ${item.home.score || '-'}`;
+  score.appendChild(main);
+  const sub = document.createElement('span'); sub.className = 'sub';
+  if (item.isLive) {
+    sub.textContent = item.statusText || 'LIVE';
+  } else {
+    // kickoff (already includes " PST"), or fallback to status/network
+    sub.textContent = item.kickoff || item.statusText || item.network || '';
+  }
+  score.appendChild(sub);
+  pill.appendChild(score);
+
+  // home team
+  const home = document.createElement('span'); home.className = 'team';
+  const hText = document.createElement('span'); hText.textContent = item.home.abbr || '';
+  home.appendChild(hText);
+  const hLogo = document.createElement('img'); hLogo.className = 'logo'; hLogo.src = item.home.logo || ''; hLogo.alt = item.home.abbr || '';
+  hLogo.onerror = () => hLogo.hidden = true;
+  home.appendChild(hLogo);
+  pill.appendChild(home);
+
+  // final bug
+  if (!item.isLive && (item.statusText||'').toUpperCase().includes('FINAL')) {
+    const f = document.createElement('span'); f.className = 'final'; f.textContent = 'FINAL';
+    pill.appendChild(f);
   }
 
-  wrap.classList.remove("hidden");
-  t.className="ticker";
-  t.innerHTML=content;
-  void t.offsetWidth;
-  t.classList.add("scroll");
-
-  setTimeout(fetchScores,70000+PAUSE_BETWEEN_LOOPS);
+  return pill;
 }
 
-fetchScores();
+/* create header pill for round/regular labels */
+function createHeaderPill(text) {
+  const pill = document.createElement('span');
+  pill.className = 'pill header-pill';
+  pill.textContent = text.toUpperCase();
+  return pill;
+}
+
+/* assemble rail from list */
+function buildRailFragment(list) {
+  const frag = document.createDocumentFragment();
+  for (const it of list) {
+    if (it.type === 'roundHeader') {
+      frag.appendChild(createHeaderPill(it.header));
+      continue;
+    }
+    const p = createPill(it);
+    frag.appendChild(p);
+  }
+  return frag;
+}
+
+/* update previousScoreMap and return keys that changed scores */
+function detectScoreChanges(list) {
+  const changedKeys = [];
+  const newMap = new Map();
+  for (const it of list) {
+    if (it.type === 'roundHeader') continue;
+    const k = scoreKey(it);
+    const scoreStr = `${it.away.score || '-'}-${it.home.score || '-'}`;
+    newMap.set(k, scoreStr);
+    const old = previousScoreMap.get(k);
+    if (old && old !== scoreStr) changedKeys.push(k);
+  }
+  previousScoreMap = newMap;
+  return changedKeys;
+}
+
+/* ===========================
+   Scrolling engine (seamless duplication + adaptive speed)
+   =========================== */
+
+let raf = null;
+let lastTs = null;
+let x = 0; // current translateX (px)
+let railWidth = 0;
+let viewportWidth = 0;
+let speedPxPerSec = 0;
+
+function stopScroll() {
+  if (raf) cancelAnimationFrame(raf);
+  raf = null;
+  lastTs = null;
+}
+
+function startScrollLoop() {
+  stopScroll();
+  // measure
+  viewportWidth = document.querySelector('.rail-viewport').clientWidth;
+
+  // clear any old spacer
+  const oldSpacers = rail.querySelectorAll('.loop-spacer');
+  oldSpacers.forEach(s => s.remove());
+
+  // measure width of first copy (before duplication)
+  railWidth = measureRailWidth();
+  if (railWidth <= 0) return;
+
+  // Add padding so even short rails scroll well
+  const pad = Math.max(MIN_PADDING, Math.round(viewportWidth * 0.4));
+  const spacer = document.createElement('span');
+  spacer.style.display = 'inline-block';
+  spacer.style.width = pad + 'px';
+  spacer.className = 'loop-spacer';
+  rail.appendChild(spacer);
+
+  // recompute after pad
+  railWidth = measureRailWidth();
+
+  // compute adaptive px/sec so that (railWidth + viewportWidth) / speed ≈ TARGET_LOOP_SECONDS
+  speedPxPerSec = Math.max(60, (railWidth + viewportWidth) / Math.max(8, TARGET_LOOP_SECONDS));
+  // ensure not too slow/fast
+  speedPxPerSec = Math.min(Math.max(speedPxPerSec, 70), 220);
+
+  // duplicate rail contents for seamless wrap (if not already duplicated)
+  ensureRailDuplicated();
+
+  x = 0; lastTs = null;
+
+  function frame(ts) {
+    if (!lastTs) lastTs = ts;
+    const dt = (ts - lastTs) / 1000;
+    lastTs = ts;
+
+    x -= speedPxPerSec * dt;
+
+    // when x <= -railWidth, wrap by adding railWidth
+    if (Math.abs(x) >= railWidth) {
+      x += railWidth;
+    }
+
+    rail.style.transform = `translateX(${x}px)`;
+    raf = requestAnimationFrame(frame);
+  }
+
+  raf = requestAnimationFrame(frame);
+}
+
+/* measure rail single width (content before duplication) */
+function measureRailWidth() {
+  let width = 0;
+  const children = Array.from(rail.children);
+  for (const child of children) {
+    if (child.classList.contains("loop-spacer")) break;
+    width += child.getBoundingClientRect().width;
+  }
+  return width;
+}
+
+function measureSingleRailWidth() {
+  return measureRailWidth();
+}
+
+/* ensure we have duplicated content so we can wrap seamlessly */
+function ensureRailDuplicated() {
+  if (!rail.dataset.duplicated) {
+    const frag = document.createDocumentFragment();
+    const children = Array.from(rail.children);
+    for (const c of children) {
+      frag.appendChild(c.cloneNode(true));
+    }
+    rail.appendChild(frag);
+    rail.dataset.duplicated = "1";
+  }
+}
+
+/* clear duplicate and rebuild when content changes */
+function rebuildRail(list) {
+  stopScroll();
+  rail.innerHTML = '';
+  rail.dataset.duplicated = '';
+  const frag = buildRailFragment(list);
+  rail.appendChild(frag);
+}
+
+/* ===========================
+   Update loop: fetch -> detect changes -> flash -> rebuild -> restart scroll
+   =========================== */
+
+async function updateAndRun() {
+  try {
+    const list = await fetchScores();
+    const changedKeys = detectScoreChanges(list);
+
+    rebuildRail(list);
+
+    if (changedKeys.length) {
+      for (const key of changedKeys) {
+        const pill = rail.querySelector(`.pill[data-key="${cssEscape(key)}"]`);
+        if (pill) {
+          pill.classList.add('score-flash');
+          setTimeout(() => pill.classList.remove('score-flash'), 1100);
+        }
+      }
+    }
+
+    setTimeout(startScrollLoop, 80);
+  } catch (err) {
+    console.error('updateAndRun error', err);
+  }
+}
+
+/* simple css escape for attribute selection */
+function cssEscape(str) {
+  return String(str).replace(/["\\]/g, '\\$&');
+}
+
+/* bootstrap */
+updateAndRun();
+setInterval(updateAndRun, REFRESH_MS);
 </script>
 </body>
 </html>
