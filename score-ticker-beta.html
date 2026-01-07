@@ -7,143 +7,154 @@
 
 <style>
   :root{
-    --bar-h: clamp(50px, 8vh, 72px);
-    --logo-size: calc(var(--bar-h) * 0.6);
-    --espn-red: #e31837;
-    --pill-bg: rgba(255,255,255,0.08);
-    --pill-border: rgba(255,255,255,0.22);
-    --target-loop-sec: 36;
-  }
+  --bar-h: clamp(50px, 8vh, 72px);
+  --logo-size: calc(var(--bar-h) * 0.6);
+  --espn-red: #e31837;
+  --pill-bg: rgba(255,255,255,0.08);
+  --pill-border: rgba(255,255,255,0.22);
+}
 
-  html,body{
-    height:100%; margin:0; padding:0; background:transparent; overflow:hidden;
-    font-family: "Roboto Condensed", "Arial Narrow", Arial, Helvetica, sans-serif;
-    -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
-  }
+html,body{
+  height:100%; margin:0; padding:0; background:transparent; overflow:hidden;
+  font-family: "Roboto Condensed","Arial Narrow",Arial,Helvetica,sans-serif;
+  -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+}
 
-  .ticker-wrap{
-    position:fixed; left:0; right:0; bottom:0;
-    height:var(--bar-h);
-    display:flex; align-items:center;
-    padding:6px 12px; box-sizing:border-box;
-    background: linear-gradient(to bottom, rgba(12,12,12,0.95), rgba(4,4,4,0.95));
-    border-top:1px solid rgba(255,255,255,0.04);
-    overflow:hidden;
-  }
+.ticker-wrap{
+  position:fixed; left:0; right:0; bottom:0;
+  height:var(--bar-h);
+  display:flex; align-items:center;
+  padding:6px 12px; box-sizing:border-box;
+  background: linear-gradient(to bottom, rgba(12,12,12,0.95), rgba(4,4,4,0.95));
+  border-top:1px solid rgba(255,255,255,0.04);
+  overflow:hidden;
+}
 
-  .ticker-wrap::before{
-    content:""; position:absolute; left:0; right:0; top:0; height:3px;
-    background: linear-gradient(90deg, var(--espn-red), color-mix(in srgb, var(--espn-red), black 6%));
-    z-index:10;
-  }
+.ticker-wrap::before{
+  content:""; position:absolute; left:0; right:0; top:0; height:3px;
+  background: linear-gradient(90deg, var(--espn-red), color-mix(in srgb, var(--espn-red), black 6%));
+  z-index:10;
+}
 
-  .rail-viewport{
-    width:100%;
-    overflow:visible;
-  }
+.rail-viewport{
+  width:100%;
+  overflow:hidden;
+}
 
-  .rail {
-    display:inline-flex;
-    align-items:center;
-    gap:18px;
-    white-space:nowrap;
-    transform: translateX(0);
-    will-change: transform;
-  }
+.rail{
+  display:inline-flex;
+  align-items:center;
+  gap:18px;
+  white-space:nowrap;
+  transform: translateX(0);
+  will-change: transform;
+}
 
-  .pill {
-    display:inline-flex;
-    align-items:center;
-    gap:12px;
-    padding:6px 12px;
-    min-height: calc(var(--bar-h) - 14px);
-    background: var(--pill-bg);
-    border-left: 3px solid var(--pill-border);
-    border-radius:3px;
-    color: #fff;
-    font-weight:700;
-    box-sizing:border-box;
-    transition: box-shadow 200ms ease;
-  }
+.pill{
+  display:inline-flex;
+  align-items:center;
+  gap:12px;
+  padding:6px 12px;
+  min-height: calc(var(--bar-h) - 14px);
+  background: var(--pill-bg);
+  border-left: 3px solid var(--pill-border);
+  border-radius:3px;
+  color:#fff;
+  font-weight:700;
+  box-sizing:border-box;
+  transition: box-shadow 200ms ease;
+}
 
-  .pill.header-pill {
-    background: rgba(255,255,255,0.12);
-    border-left-color: var(--espn-red);
-    text-transform: none;
-    letter-spacing: 0.04em;
-    font-size: calc(var(--bar-h) * 0.22);
-  }
+.pill.header-pill{
+  background: rgba(255,255,255,0.16);
+  border-left-color: var(--espn-red);
+  text-transform:none;
+  letter-spacing:0.06em;
+  font-size: calc(var(--bar-h) * 0.26); /* slightly larger */
+}
 
-  .pill .team {
-    display:inline-flex; align-items:center; gap:8px; text-transform:uppercase;
-    font-size: calc(var(--bar-h) * 0.28);
-  }
+.pill .team{
+  display:inline-flex; align-items:center; gap:8px;
+  text-transform:uppercase;
+  font-size: calc(var(--bar-h) * 0.28);
+}
 
-  .pill img.logo {
-    width: var(--logo-size);
-    height: var(--logo-size);
-    object-fit: contain;
-    display:block;
-  }
+.pill img.logo{
+  width: var(--logo-size);
+  height: var(--logo-size);
+  object-fit:contain;
+  display:block;
+}
 
-  .pill .score {
-    display:flex; flex-direction:column; align-items:center; justify-content:center;
-    font-variant-numeric: tabular-nums;
-    line-height:1;
-  }
-  .pill .score .main { font-size: calc(var(--bar-h) * 0.28); font-weight:900; }
-  .pill .score .sub { font-size: calc(var(--bar-h) * 0.20); opacity:0.92; text-transform:uppercase; }
+.pill .score{
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  font-variant-numeric: tabular-nums;
+  line-height:1;
+}
 
-  .pill .final {
-    margin-left:8px;
-    padding:3px 7px;
-    background: var(--espn-red);
-    color:white;
-    font-weight:900;
-    font-size: calc(var(--bar-h) * 0.16);
-    border-radius:3px;
-  }
+.pill .score .main{
+  font-size: calc(var(--bar-h) * 0.28);
+  font-weight:900;
+}
 
-  .pill .networks {
-    display:inline-flex;
-    align-items:center;
-    gap:6px;
-    margin-left:10px;
-  }
+.pill .score .sub{
+  font-size: calc(var(--bar-h) * 0.20);
+  opacity:0.92;
+  text-transform:uppercase;
+}
 
-  .network-logo {
-    height: calc(var(--bar-h) * 0.32);
-    width:auto;
-    object-fit:contain;
-    display:inline-block;
-  }
+.pill .final{
+  margin-left:8px;
+  padding:3px 7px;
+  background: var(--espn-red);
+  color:white;
+  font-weight:900;
+  font-size: calc(var(--bar-h) * 0.16);
+  border-radius:3px;
+}
 
-  .network-text {
-    font-size: calc(var(--bar-h) * 0.18);
-    opacity:0.9;
-    text-transform:uppercase;
-  }
+.pill .networks{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  margin-left:10px;
+}
 
-  .pill.score-flash {
-    box-shadow: 0 6px 18px rgba(0,0,0,0.45), 0 0 14px rgba(255,255,255,0.04) inset;
-    animation: scorePop 900ms ease;
-  }
-  @keyframes scorePop {
-    0% { transform: scale(1.02); background: rgba(255,255,255,0.14); }
-    40% { transform: scale(1.00); background: var(--pill-bg); }
-    100% { transform: scale(1); background: var(--pill-bg); }
-  }
+.network-logo{
+  height: calc(var(--bar-h) * 0.32);
+  width:auto;
+  object-fit:contain;
+  display:inline-block;
+}
 
-  img.logo[hidden] { display:none; }
+.network-text{
+  font-size: calc(var(--bar-h) * 0.18);
+  opacity:0.9;
+  text-transform:uppercase;
+}
 
-  .pill.league-nfl { background-color: rgba(1, 51, 105, 0.20); }
-  .pill.league-nba { background-color: rgba(23, 64, 139, 0.20); }
-  .pill.league-mlb { background-color: rgba(0, 45, 114, 0.20); }
-  .pill.league-nhl { background-color: rgba(17, 17, 17, 0.20); }
+.pill.score-flash{
+  box-shadow: 0 6px 18px rgba(0,0,0,0.45), 0 0 14px rgba(255,255,255,0.04) inset;
+  animation: scorePop 900ms ease;
+}
 
-  @media (prefers-reduced-motion: reduce) {
-    .rail { transition: none !important; animation: none !important; }
-  }
+@keyframes scorePop{
+  0%{ transform:scale(1.02); background:rgba(255,255,255,0.14); }
+  40%{ transform:scale(1.00); background:var(--pill-bg); }
+  100%{ transform:scale(1); background:var(--pill-bg); }
+}
+
+img.logo[hidden]{ display:none; }
+
+.pill.league-nfl{ background-color: rgba(1,51,105,0.20); }
+.pill.league-nba{ background-color: rgba(23,64,139,0.20); }
+.pill.league-mlb{ background-color: rgba(0,45,114,0.20); }
+.pill.league-nhl{ background-color: rgba(17,17,17,0.20); }
+
+@media (prefers-reduced-motion: reduce){
+  .rail{ transition:none !important; animation:none !important; }
+}
+
 </style>
 </head>
 <body>
@@ -153,12 +164,156 @@
     </div>
   </div>
 
-<script>
-/* CONFIG */
-const TARGET_LOOP_SECONDS = 36;
-const MIN_PADDING = 600;
-const REFRESH_MS = 45_000;
 
+<script>
+:root{
+  --bar-h: clamp(50px, 8vh, 72px);
+  --logo-size: calc(var(--bar-h) * 0.6);
+  --espn-red: #e31837;
+  --pill-bg: rgba(255,255,255,0.08);
+  --pill-border: rgba(255,255,255,0.22);
+}
+
+html,body{
+  height:100%; margin:0; padding:0; background:transparent; overflow:hidden;
+  font-family: "Roboto Condensed","Arial Narrow",Arial,Helvetica,sans-serif;
+  -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+}
+
+.ticker-wrap{
+  position:fixed; left:0; right:0; bottom:0;
+  height:var(--bar-h);
+  display:flex; align-items:center;
+  padding:6px 12px; box-sizing:border-box;
+  background: linear-gradient(to bottom, rgba(12,12,12,0.95), rgba(4,4,4,0.95));
+  border-top:1px solid rgba(255,255,255,0.04);
+  overflow:hidden;
+}
+
+.ticker-wrap::before{
+  content:""; position:absolute; left:0; right:0; top:0; height:3px;
+  background: linear-gradient(90deg, var(--espn-red), color-mix(in srgb, var(--espn-red), black 6%));
+  z-index:10;
+}
+
+.rail-viewport{
+  width:100%;
+  overflow:hidden;
+}
+
+.rail{
+  display:inline-flex;
+  align-items:center;
+  gap:18px;
+  white-space:nowrap;
+  transform: translateX(0);
+  will-change: transform;
+}
+
+.pill{
+  display:inline-flex;
+  align-items:center;
+  gap:12px;
+  padding:6px 12px;
+  min-height: calc(var(--bar-h) - 14px);
+  background: var(--pill-bg);
+  border-left: 3px solid var(--pill-border);
+  border-radius:3px;
+  color:#fff;
+  font-weight:700;
+  box-sizing:border-box;
+  transition: box-shadow 200ms ease;
+}
+
+.pill.header-pill{
+  background: rgba(255,255,255,0.16);
+  border-left-color: var(--espn-red);
+  text-transform:none;
+  letter-spacing:0.06em;
+  font-size: calc(var(--bar-h) * 0.26); /* slightly larger */
+}
+
+.pill .team{
+  display:inline-flex; align-items:center; gap:8px;
+  text-transform:uppercase;
+  font-size: calc(var(--bar-h) * 0.28);
+}
+
+.pill img.logo{
+  width: var(--logo-size);
+  height: var(--logo-size);
+  object-fit:contain;
+  display:block;
+}
+
+.pill .score{
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  font-variant-numeric: tabular-nums;
+  line-height:1;
+}
+
+.pill .score .main{
+  font-size: calc(var(--bar-h) * 0.28);
+  font-weight:900;
+}
+
+.pill .score .sub{
+  font-size: calc(var(--bar-h) * 0.20);
+  opacity:0.92;
+  text-transform:uppercase;
+}
+
+.pill .final{
+  margin-left:8px;
+  padding:3px 7px;
+  background: var(--espn-red);
+  color:white;
+  font-weight:900;
+  font-size: calc(var(--bar-h) * 0.16);
+  border-radius:3px;
+}
+
+.pill .networks{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  margin-left:10px;
+}
+
+.network-logo{
+  height: calc(var(--bar-h) * 0.32);
+  width:auto;
+  object-fit:contain;
+  display:inline-block;
+}
+
+.network-text{
+  font-size: calc(var(--bar-h) * 0.18);
+  opacity:0.9;
+  text-transform:uppercase;
+}
+
+.pill.score-flash{
+  box-shadow: 0 6px 18px rgba(0,0,0,0.45), 0 0 14px rgba(255,255,255,0.04) inset;
+  animation: scorePop 900ms ease;
+}
+
+@keyframes scorePop{
+  0%{ transform:scale(1.02); background:rgba(255,255,255,0.14); }
+  40%{ transform:scale(1.00); background:var(--pill-bg); }
+  100%{ transform:scale(1); background:var(--pill-bg); }
+}
+
+img.logo[hidden]{ display:none; }
+
+.pill.league-nfl{ background-color: rgba(1,51,105,0.20); }
+.pill.league-nba{ background-color: rgba(23,64,139,0.20); }
+.pill.league-mlb{ background-color: rgba(0,45,114,0.20); }
+.pill.league-nhl{ background-color: rgba(17,17,17,0.20); }
+
+@media (prefers-reduced-motion: reduce){
+  .rail{ transition:none !important; animation:none !important; }
+}
 const LEAGUES = [
   { name: "NFL", key: "nfl", url: "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard" },
   { name: "NBA", key: "nba", url: "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard" },
@@ -166,14 +321,14 @@ const LEAGUES = [
   { name: "NHL", key: "nhl", url: "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard" }
 ];
 
+const REFRESH_MS = 45_000;
 const CACHE_TTL = 30_000;
+const SPEED_PX_PER_SEC = 110; // fixed for continuous loop
 
-/* PROXY */
-function proxyUrl(url) {
+function proxyUrl(url){
   return "https://api.allorigins.win/raw?url=" + encodeURIComponent(url);
 }
 
-/* NETWORK LOGOS */
 const NETWORK_LOGOS = {
   "ESPN": proxyUrl("https://upload.wikimedia.org/wikipedia/commons/2/2f/ESPN_wordmark.svg"),
   "ESPN2": proxyUrl("https://upload.wikimedia.org/wikipedia/commons/2/2e/ESPN2_wordmark.svg"),
@@ -194,134 +349,132 @@ const NETWORK_LOGOS = {
   "YouTube TV": proxyUrl("https://upload.wikimedia.org/wikipedia/commons/0/09/YouTube_TV_logo.svg")
 };
 
-/* SAFE ACCESS */
-function safe(o, p, f = "") {
-  try { return p.split(".").reduce((x, k) => (x && x[k] !== undefined ? x[k] : undefined), o) ?? f; }
-  catch { return f; }
+function safe(o, p, f=""){
+  try{
+    return p.split(".").reduce((x,k)=>(x && x[k]!==undefined ? x[k] : undefined), o) ?? f;
+  }catch{ return f; }
 }
 
-/* FETCH JSON (with proxy fallback) */
-async function fetchJson(url) {
-  try {
-    const r = await fetch(url, { cache: "no-store" });
-    if (r.ok) return r.json();
-  } catch (e) {}
-  try {
+async function fetchJson(url){
+  try{
+    const r = await fetch(url, { cache:"no-store" });
+    if(r.ok) return r.json();
+  }catch{}
+  try{
     const r2 = await fetch("https://api.allorigins.win/raw?url=" + encodeURIComponent(url));
-    if (r2.ok) return r2.json();
-  } catch (e) {}
+    if(r2.ok) return r2.json();
+  }catch{}
   return null;
 }
 
-/* PST TIME */
-function pstTimestamp(iso) {
-  try {
-    if (!iso) return 0;
+function pstTimestamp(iso){
+  try{
+    if(!iso) return 0;
     const d = new Date(iso);
-    const local = new Date(d.toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
+    const local = new Date(d.toLocaleString("en-US",{ timeZone:"America/Los_Angeles" }));
     return local.getTime();
-  } catch { return 0; }
+  }catch{ return 0; }
 }
 
-function formatPST(iso) {
-  try {
-    if (!iso) return "";
+function formatPST(iso){
+  try{
+    if(!iso) return "";
     const d = new Date(iso);
-    const local = new Date(d.toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
-    const base = local.toLocaleString("en-US", {
-      month: "numeric",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true
+    const local = new Date(d.toLocaleString("en-US",{ timeZone:"America/Los_Angeles" }));
+    const base = local.toLocaleString("en-US",{
+      month:"numeric",
+      day:"numeric",
+      hour:"numeric",
+      minute:"2-digit",
+      hour12:true
     }).replace(",", "");
     return base + " PST";
-  } catch { return ""; }
+  }catch{ return ""; }
 }
 
-/* GAME STATE */
-function gameState(item) {
+function gameState(item){
   const st = (item.statusText || "").toUpperCase();
-  if (item.isLive) return 1;
-  if (st.includes("FINAL")) return 2;
+  if(item.isLive) return 1;
+  if(st.includes("FINAL")) return 2;
   return 0;
 }
 
-function gameSort(a, b) {
+function gameSort(a,b){
   const aState = gameState(a);
   const bState = gameState(b);
-  if (aState !== bState) return aState - bState;
+  if(aState !== bState) return aState - bState;
   return pstTimestamp(a.iso) - pstTimestamp(b.iso);
 }
 
-/* FETCH SCORES */
 let CACHE = null, CACHE_TS = 0;
 
-async function fetchScores() {
+async function fetchScores(){
   const now = Date.now();
-  if (CACHE && (now - CACHE_TS) < CACHE_TTL) return CACHE;
+  if(CACHE && (now - CACHE_TS) < CACHE_TTL) return CACHE;
 
   const allItems = [];
 
-  for (const lg of LEAGUES) {
+  for(const lg of LEAGUES){
     const leagueKey = lg.key.toLowerCase();
     const playoffGroups = {};
     const regulars = [];
 
-    try {
+    try{
       const data = await fetchJson(lg.url);
-      if (!data) continue;
+      if(!data) continue;
 
       const events = (data.events || []).slice();
-      for (const ev of events) {
-        const seasonType = safe(ev, "season.type", 0);
-        if (seasonType === 1) continue; // skip preseason
+      for(const ev of events){
+        const seasonType = safe(ev,"season.type",0);
+        if(seasonType === 1) continue; // skip preseason
 
-        const comp = safe(ev, "competitions.0", null);
-        if (!comp) continue;
-        const away = (comp.competitors || []).find(t => t.homeAway === "away");
-        const home = (comp.competitors || []).find(t => t.homeAway === "home");
-        if (!away || !home) continue;
+        const comp = safe(ev,"competitions.0",null);
+        if(!comp) continue;
+        const away = (comp.competitors || []).find(t=>t.homeAway==="away");
+        const home = (comp.competitors || []).find(t=>t.homeAway==="home");
+        if(!away || !home) continue;
 
         const iso = ev.date || comp.date || "";
-        if (!iso) continue;
+        if(!iso) continue;
 
         const ts = pstTimestamp(iso);
         const daysOut = (ts - Date.now()) / 86400000;
-        if (daysOut > 30) continue; // skip >30 days out
+        if(daysOut > 30) continue;
 
         const kickoff = formatPST(iso);
 
-        const status = safe(comp, "status.type", {});
-        const state = safe(status, "state", "");
+        const status = safe(comp,"status.type",{});
+        const state = safe(status,"state","");
         const isLive = state === "in";
-        const statusText = isLive ? "LIVE" : (safe(status, "shortDetail", "") || safe(status, "type.text", "") || "");
-        const statusDetail = (safe(status, "type.detail", "") || "").toUpperCase();
+        const statusText = isLive ? "LIVE" : (safe(status,"shortDetail","") || safe(status,"type.text","") || "");
+        const statusDetail = (safe(status,"type.detail","") || "").toUpperCase();
 
-        const broadcasts = safe(comp, "broadcasts", []) || safe(ev, "broadcasts", []) || [];
+        const broadcasts = safe(comp,"broadcasts",[]) || safe(ev,"broadcasts",[]) || [];
         let networkNames = [];
-        if (Array.isArray(broadcasts) && broadcasts.length) {
-          const nat = broadcasts.filter(b => b.market === "national");
+        if(Array.isArray(broadcasts) && broadcasts.length){
+          const nat = broadcasts.filter(b=>b.market==="national");
           const use = nat.length ? nat : broadcasts;
-          for (const b of use) {
-            if (Array.isArray(b.names)) {
-              for (const nm of b.names) {
-                if (nm && !networkNames.includes(nm)) networkNames.push(nm);
+          for(const b of use){
+            if(Array.isArray(b.names)){
+              for(const nm of b.names){
+                if(nm && !networkNames.includes(nm)) networkNames.push(nm);
               }
-            } else if (b.name && !networkNames.includes(b.name)) {
+            }else if(b.name && !networkNames.includes(b.name)){
               networkNames.push(b.name);
             }
           }
         }
 
-        const awayLogo = safe(away, "team.logo", safe(away, "team.logos.0.href", "")) || "";
-        const homeLogo = safe(home, "team.logo", safe(home, "team.logos.0.href", "")) || "";
-        const awayAbbr = (safe(away, "team.abbreviation", safe(away, "team.displayName", "")) || "").toUpperCase();
-        const homeAbbr = (safe(home, "team.abbreviation", safe(home, "team.displayName", "")) || "").toUpperCase();
-        const awayScore = safe(away, "score", "");
-        const homeScore = safe(home, "score", "");
+        const awayLogo = safe(away,"team.logo", safe(away,"team.logos.0.href","")) || "";
+        const homeLogo = safe(home,"team.logo", safe(home,"team.logos.0.href","")) || "";
+        const awayAbbr = (safe(away,"team.abbreviation", safe(away,"team.displayName","")) || "").toUpperCase();
+        const homeAbbr = (safe(home,"team.abbreviation", safe(home,"team.displayName","")) || "").toUpperCase();
+        const awayScore = safe(away,"score","");
+        const homeScore = safe(home,"score","");
         const isPlayoff = seasonType === 3;
-        const round = isPlayoff ? safe(comp, "notes.0.headline", safe(ev, "league.name", "Playoffs")) : "";
+        const roundRaw = safe(comp,"notes.0.headline", safe(ev,"league.name","Playoffs"));
+
+        const round = normalizeRound(roundRaw);
 
         const item = {
           league: lg.name,
@@ -340,17 +493,16 @@ async function fetchScores() {
         };
 
         const stateCode = gameState(item);
-
-        if (stateCode === 0 && networkNames.length) {
+        if(stateCode === 0 && networkNames.length){
           item.networks = networkNames.slice();
-        } else {
+        }else{
           item.networks = [];
         }
 
-        if (isPlayoff) {
+        if(isPlayoff){
           playoffGroups[round] = playoffGroups[round] || [];
           playoffGroups[round].push(item);
-        } else {
+        }else{
           regulars.push(item);
         }
       }
@@ -358,86 +510,103 @@ async function fetchScores() {
       const leagueItems = [];
 
       const rounds = Object.keys(playoffGroups).sort();
-      for (const r of rounds) {
+      for(const r of rounds){
         const arr = playoffGroups[r].slice().sort(gameSort);
-        if (arr.length) {
-          leagueItems.push({ type: 'roundHeader', header: r, leagueKey });
+        if(arr.length){
+          leagueItems.push({ type:"roundHeader", header:r, leagueKey });
           leagueItems.push(...arr);
         }
       }
 
       const regularSorted = regulars.slice().sort(gameSort);
-      if (regularSorted.length) {
-        leagueItems.push({ type: 'roundHeader', header: 'Regular', leagueKey });
+      if(regularSorted.length){
+        leagueItems.push({ type:"roundHeader", header:"Regular", leagueKey });
         leagueItems.push(...regularSorted);
       }
 
       allItems.push(...leagueItems);
-    } catch (err) {
+    }catch(err){
       console.error("League fetch error", lg.name, err);
     }
   }
 
   const seen = new Set(); const dedup = [];
-  for (const it of allItems) {
-    if (it.type === 'roundHeader') { dedup.push(it); continue; }
+  for(const it of allItems){
+    if(it.type === "roundHeader"){ dedup.push(it); continue; }
     const key = `${it.iso}|${it.away.abbr}|${it.home.abbr}|${it.league}`;
-    if (!seen.has(key)) { seen.add(key); dedup.push(it); }
+    if(!seen.has(key)){ seen.add(key); dedup.push(it); }
   }
 
   CACHE = dedup; CACHE_TS = Date.now();
   return dedup;
 }
 
-/* RENDERING */
-const rail = document.getElementById('rail');
+function normalizeRound(raw){
+  const t = (raw || "").toUpperCase();
+  if(t.includes("WILD")) return "WILD CARD";
+  if(t.includes("DIVISION")) return "DIVISIONAL";
+  if(t.includes("CHAMP") && !t.includes("SUPER")) return "CONF CHAMPIONSHIP";
+  if(t.includes("SUPER BOWL")) return "SUPER BOWL";
+  return raw || "Playoffs";
+}
+const rail = document.getElementById("rail");
 let previousScoreMap = new Map();
+let x = 0;
+let lastTs = null;
 
-function scoreKey(item) {
-  return `${item.leagueKey}|${item.away.abbr}|${item.home.abbr}|${item.iso || ''}`;
+function scoreKey(item){
+  return `${item.leagueKey}|${item.away.abbr}|${item.home.abbr}|${item.iso || ""}`;
 }
 
-function createPill(item) {
-  const pill = document.createElement('span');
-  pill.className = 'pill';
-  pill.dataset.key = scoreKey(item);
+function createHeaderPill(text, leagueKey){
+  const pill = document.createElement("span");
+  pill.className = "pill header-pill";
+  pill.textContent = text;
+  pill.classList.add(`league-${leagueKey}`);
+  pill.dataset.type = "header";
+  pill.dataset.header = text;
+  pill.dataset.leagueKey = leagueKey;
+  return pill;
+}
+
+function createGamePill(item){
+  const pill = document.createElement("span");
+  pill.className = "pill";
   pill.classList.add(`league-${item.leagueKey}`);
+  pill.dataset.type = "game";
+  pill.dataset.key = scoreKey(item);
 
-  const stateCode = gameState(item); // 0=future,1=live,2=final
+  const stateCode = gameState(item); // 0 future,1 live,2 final
 
-  // AWAY TEAM
-  const away = document.createElement('span');
-  away.className = 'team';
-  const aLogo = document.createElement('img');
-  aLogo.className = 'logo';
-  aLogo.src = item.away.logo || '';
-  aLogo.alt = item.away.abbr || '';
+  const away = document.createElement("span");
+  away.className = "team";
+  const aLogo = document.createElement("img");
+  aLogo.className = "logo";
+  aLogo.src = item.away.logo || "";
+  aLogo.alt = item.away.abbr || "";
   aLogo.onerror = () => aLogo.hidden = true;
   away.appendChild(aLogo);
-  const aText = document.createElement('span');
-  aText.textContent = item.away.abbr || '';
+  const aText = document.createElement("span");
+  aText.textContent = item.away.abbr || "";
   away.appendChild(aText);
   pill.appendChild(away);
 
-  // SCORE / TIME BLOCK
-  const score = document.createElement('span');
-  score.className = 'score';
-  const main = document.createElement('span');
-  main.className = 'main';
-  const sub = document.createElement('span');
-  sub.className = 'sub';
+  const score = document.createElement("span");
+  score.className = "score";
+  const main = document.createElement("span");
+  main.className = "main";
+  const sub = document.createElement("span");
+  sub.className = "sub";
 
-  if (stateCode === 0) {
-    // FUTURE GAME: show kickoff time in main, no score
-    main.textContent = item.kickoff || '';
-    sub.textContent = ''; // we rely on networks visually instead
-  } else {
-    // LIVE or FINAL: show score
-    main.textContent = `${item.away.score || '-'} – ${item.home.score || '-'}`;
-    if (item.isLive) {
-      sub.textContent = item.statusText || 'LIVE';
-    } else {
-      sub.textContent = item.statusText || '';
+  if(stateCode === 0){
+    main.textContent = item.kickoff || "";
+    sub.textContent = "";
+  }else{
+    main.textContent = `${item.away.score || "-"} – ${item.home.score || "-"}`;
+    if(item.isLive){
+      sub.textContent = item.statusText || "LIVE";
+    }else{
+      sub.textContent = item.statusText || "";
     }
   }
 
@@ -445,44 +614,41 @@ function createPill(item) {
   score.appendChild(sub);
   pill.appendChild(score);
 
-  // HOME TEAM
-  const home = document.createElement('span');
-  home.className = 'team';
-  const hText = document.createElement('span');
-  hText.textContent = item.home.abbr || '';
+  const home = document.createElement("span");
+  home.className = "team";
+  const hText = document.createElement("span");
+  hText.textContent = item.home.abbr || "";
   home.appendChild(hText);
-  const hLogo = document.createElement('img');
-  hLogo.className = 'logo';
-  hLogo.src = item.home.logo || '';
-  hLogo.alt = item.home.abbr || '';
+  const hLogo = document.createElement("img");
+  hLogo.className = "logo";
+  hLogo.src = item.home.logo || "";
+  hLogo.alt = item.home.abbr || "";
   hLogo.onerror = () => hLogo.hidden = true;
   home.appendChild(hLogo);
   pill.appendChild(home);
 
-  // FINAL BUG
-  if (stateCode === 2) {
-    const f = document.createElement('span');
-    f.className = 'final';
-    f.textContent = 'FINAL';
+  if(stateCode === 2){
+    const f = document.createElement("span");
+    f.className = "final";
+    f.textContent = "FINAL";
     pill.appendChild(f);
   }
 
-  // NETWORKS (ONLY FOR FUTURE GAMES)
-  if (stateCode === 0 && Array.isArray(item.networks) && item.networks.length) {
-    const nets = document.createElement('span');
-    nets.className = 'networks';
-    for (const name of item.networks) {
+  if(stateCode === 0 && Array.isArray(item.networks) && item.networks.length){
+    const nets = document.createElement("span");
+    nets.className = "networks";
+    for(const name of item.networks){
       const logoUrl = NETWORK_LOGOS[name];
-      if (logoUrl) {
-        const img = document.createElement('img');
-        img.className = 'network-logo';
+      if(logoUrl){
+        const img = document.createElement("img");
+        img.className = "network-logo";
         img.src = logoUrl;
         img.alt = name;
-        img.onerror = () => { img.remove(); };
+        img.onerror = () => img.remove();
         nets.appendChild(img);
-      } else {
-        const span = document.createElement('span');
-        span.className = 'network-text';
+      }else{
+        const span = document.createElement("span");
+        span.className = "network-text";
         span.textContent = name;
         nets.appendChild(span);
       }
@@ -493,163 +659,171 @@ function createPill(item) {
   return pill;
 }
 
-function createHeaderPill(text, leagueKey) {
-  const pill = document.createElement('span');
-  pill.className = 'pill header-pill';
-  pill.textContent = text;
-  pill.classList.add(`league-${leagueKey}`);
-  return pill;
-}
-
-function buildRailFragment(list) {
-  const frag = document.createDocumentFragment();
-  for (const it of list) {
-    if (it.type === 'roundHeader') {
-      frag.appendChild(createHeaderPill(it.header, it.leagueKey || 'nfl'));
-      continue;
+function buildInitialRail(items){
+  rail.innerHTML = "";
+  for(const it of items){
+    if(it.type === "roundHeader"){
+      rail.appendChild(createHeaderPill(it.header, it.leagueKey || "nfl"));
+    }else{
+      rail.appendChild(createGamePill(it));
     }
-    const p = createPill(it);
-    frag.appendChild(p);
   }
-  return frag;
 }
 
-function detectScoreChanges(list) {
+function detectScoreChanges(list){
   const changedKeys = [];
   const newMap = new Map();
-  for (const it of list) {
-    if (it.type === 'roundHeader') continue;
+  for(const it of list){
+    if(it.type === "roundHeader") continue;
     const k = scoreKey(it);
-    const scoreStr = `${it.away.score || '-'}-${it.home.score || '-'}`;
+    const scoreStr = `${it.away.score || "-"}-${it.home.score || "-"}`;
     newMap.set(k, scoreStr);
     const old = previousScoreMap.get(k);
-    if (old && old !== scoreStr) changedKeys.push(k);
+    if(old && old !== scoreStr) changedKeys.push(k);
   }
   previousScoreMap = newMap;
   return changedKeys;
 }
 
-/* SCROLL ENGINE */
-let raf = null;
-let lastTs = null;
-let x = 0;
-let railWidth = 0;
-let viewportWidth = 0;
-let speedPxPerSec = 0;
+function updatePillsInPlace(items){
+  const byKey = new Map();
+  for(const it of items){
+    if(it.type === "roundHeader") continue;
+    byKey.set(scoreKey(it), it);
+  }
 
-function stopScroll() {
-  if (raf) cancelAnimationFrame(raf);
-  raf = null;
-  lastTs = null;
-}
-
-function measureRailWidth() {
-  let width = 0;
   const children = Array.from(rail.children);
-  for (const child of children) {
-    if (child.classList.contains("loop-spacer")) break;
-    width += child.getBoundingClientRect().width;
-  }
-  return width;
-}
+  for(const el of children){
+    if(el.dataset.type !== "game") continue;
+    const key = el.dataset.key;
+    const item = byKey.get(key);
+    if(!item) continue;
 
-function ensureRailDuplicated() {
-  if (!rail.dataset.duplicated) {
-    const frag = document.createDocumentFragment();
-    const children = Array.from(rail.children);
-    for (const c of children) {
-      frag.appendChild(c.cloneNode(true));
+    const stateCode = gameState(item);
+    const scoreEl = el.querySelector(".score");
+    const main = scoreEl.querySelector(".main");
+    const sub = scoreEl.querySelector(".sub");
+
+    if(stateCode === 0){
+      main.textContent = item.kickoff || "";
+      sub.textContent = "";
+      const finalBug = el.querySelector(".final");
+      if(finalBug) finalBug.remove();
+      const netsOld = el.querySelector(".networks");
+      if(netsOld) netsOld.remove();
+      if(Array.isArray(item.networks) && item.networks.length){
+        const nets = document.createElement("span");
+        nets.className = "networks";
+        for(const name of item.networks){
+          const logoUrl = NETWORK_LOGOS[name];
+          if(logoUrl){
+            const img = document.createElement("img");
+            img.className = "network-logo";
+            img.src = logoUrl;
+            img.alt = name;
+            img.onerror = () => img.remove();
+            nets.appendChild(img);
+          }else{
+            const span = document.createElement("span");
+            span.className = "network-text";
+            span.textContent = name;
+            nets.appendChild(span);
+          }
+        }
+        el.appendChild(nets);
+      }
+    }else{
+      main.textContent = `${item.away.score || "-"} – ${item.home.score || "-"}`;
+      if(item.isLive){
+        sub.textContent = item.statusText || "LIVE";
+      }else{
+        sub.textContent = item.statusText || "";
+      }
+      const netsOld = el.querySelector(".networks");
+      if(netsOld) netsOld.remove();
+      let finalBug = el.querySelector(".final");
+      if(gameState(item) === 2){
+        if(!finalBug){
+          finalBug = document.createElement("span");
+          finalBug.className = "final";
+          finalBug.textContent = "FINAL";
+          el.appendChild(finalBug);
+        }
+      }else if(finalBug){
+        finalBug.remove();
+      }
     }
-    rail.appendChild(frag);
-    rail.dataset.duplicated = "1";
   }
 }
 
-function startScrollLoop() {
-  stopScroll();
+function cssEscape(str){
+  return String(str).replace(/["\\]/g, "\\$&");
+}
 
-  viewportWidth = document.querySelector('.rail-viewport').clientWidth;
+/* CONTINUOUS LOOP */
+function loopFrame(ts){
+  if(!lastTs) lastTs = ts;
+  const dt = (ts - lastTs) / 1000;
+  lastTs = ts;
 
-  const oldSpacers = rail.querySelectorAll('.loop-spacer');
-  oldSpacers.forEach(s => s.remove());
+  x -= SPEED_PX_PER_SEC * dt;
+  rail.style.transform = `translateX(${x}px)`;
 
-  railWidth = measureRailWidth();
-  if (railWidth <= 0) return;
+  const viewport = document.querySelector(".rail-viewport");
+  const vpRect = viewport.getBoundingClientRect();
 
-  const pad = Math.max(MIN_PADDING, Math.round(viewportWidth * 0.4));
-  const spacer = document.createElement('span');
-  spacer.style.display = 'inline-block';
-  spacer.style.width = pad + 'px';
-  spacer.className = 'loop-spacer';
-  rail.appendChild(spacer);
-
-  railWidth = measureRailWidth();
-
-  speedPxPerSec = Math.max(60, (railWidth + viewportWidth) / Math.max(8, TARGET_LOOP_SECONDS));
-  speedPxPerSec = Math.min(Math.max(speedPxPerSec, 70), 220);
-
-  ensureRailDuplicated();
-
-  x = 0;
-  rail.style.transform = "translateX(0px)";
-  lastTs = null;
-
-  function frame(ts) {
-    if (!lastTs) lastTs = ts;
-    const dt = (ts - lastTs) / 1000;
-    lastTs = ts;
-
-    x -= speedPxPerSec * dt;
-
-    if (Math.abs(x) >= railWidth) {
-      x += railWidth;
+  let moved = false;
+  while(true){
+    const first = rail.firstElementChild;
+    if(!first) break;
+    const rect = first.getBoundingClientRect();
+    if(rect.right < vpRect.left){
+      rail.appendChild(first);
+      moved = true;
+    }else{
+      break;
     }
-
-    rail.style.transform = `translateX(${x}px)`;
-    raf = requestAnimationFrame(frame);
   }
 
-  raf = requestAnimationFrame(frame);
+  if(moved){
+    const newFirst = rail.firstElementChild;
+    if(newFirst){
+      const rect = newFirst.getBoundingClientRect();
+      const delta = vpRect.left - rect.left;
+      x += delta;
+      rail.style.transform = `translateX(${x}px)`;
+    }
+  }
+
+  requestAnimationFrame(loopFrame);
 }
 
-function rebuildRail(list) {
-  stopScroll();
-  rail.innerHTML = '';
-  rail.dataset.duplicated = '';
-  const frag = buildRailFragment(list);
-  rail.appendChild(frag);
-}
+/* MAIN */
+async function bootstrapTicker(){
+  const items = await fetchScores();
+  buildInitialRail(items);
+  detectScoreChanges(items); // initialize map
+  requestAnimationFrame(loopFrame);
 
-/* UPDATE LOOP */
-async function updateAndRun() {
-  try {
-    const list = await fetchScores();
-    const changedKeys = detectScoreChanges(list);
+  setInterval(async ()=>{
+    const latest = await fetchScores();
+    const changed = detectScoreChanges(latest);
+    updatePillsInPlace(latest);
 
-    rebuildRail(list);
-
-    if (changedKeys.length) {
-      for (const key of changedKeys) {
+    if(changed.length){
+      for(const key of changed){
         const pill = rail.querySelector(`.pill[data-key="${cssEscape(key)}"]`);
-        if (pill) {
-          pill.classList.add('score-flash');
-          setTimeout(() => pill.classList.remove('score-flash'), 1100);
+        if(pill){
+          pill.classList.add("score-flash");
+          setTimeout(()=>pill.classList.remove("score-flash"), 1100);
         }
       }
     }
-
-    setTimeout(startScrollLoop, 80);
-  } catch (err) {
-    console.error('updateAndRun error', err);
-  }
+  }, REFRESH_MS);
 }
 
-function cssEscape(str) {
-  return String(str).replace(/["\\]/g, '\\$&');
-}
+bootstrapTicker();
 
-updateAndRun();
-setInterval(updateAndRun, REFRESH_MS);
 </script>
 </body>
 </html>
