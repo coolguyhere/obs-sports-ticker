@@ -401,4 +401,255 @@ function createPill(item) {
   const pill = document.createElement('span');
   pill.className = 'pill';
   pill.dataset.key = scoreKey(item);
-  pill
+  pill.classList.add(`league-${item.leagueKey}`);
+
+  const stateCode = gameState(item); // 0=future,1=live,2=final
+
+  // AWAY TEAM
+  const away = document.createElement('span');
+  away.className = 'team';
+  const aLogo = document.createElement('img');
+  aLogo.className = 'logo';
+  aLogo.src = item.away.logo || '';
+  aLogo.alt = item.away.abbr || '';
+  aLogo.onerror = () => aLogo.hidden = true;
+  away.appendChild(aLogo);
+  const aText = document.createElement('span');
+  aText.textContent = item.away.abbr || '';
+  away.appendChild(aText);
+  pill.appendChild(away);
+
+  // SCORE / TIME BLOCK
+  const score = document.createElement('span');
+  score.className = 'score';
+  const main = document.createElement('span');
+  main.className = 'main';
+  const sub = document.createElement('span');
+  sub.className = 'sub';
+
+  if (stateCode === 0) {
+    // FUTURE GAME: show kickoff time in main, no score
+    main.textContent = item.kickoff || '';
+    sub.textContent = ''; // we rely on networks visually instead
+  } else {
+    // LIVE or FINAL: show score
+    main.textContent = `${item.away.score || '-'} – ${item.home.score || '-'}`;
+    if (item.isLive) {
+      sub.textContent = item.statusText || 'LIVE';
+    } else {
+      sub.textContent = item.statusText || '';
+    }
+  }
+
+  score.appendChild(main);
+  score.appendChild(sub);
+  pill.appendChild(score);
+
+  // HOME TEAM
+  const home = document.createElement('span');
+  home.className = 'team';
+  const hText = document.createElement('span');
+  hText.textContent = item.home.abbr || '';
+  home.appendChild(hText);
+  const hLogo = document.createElement('img');
+  hLogo.className = 'logo';
+  hLogo.src = item.home.logo || '';
+  hLogo.alt = item.home.abbr || '';
+  hLogo.onerror = () => hLogo.hidden = true;
+  home.appendChild(hLogo);
+  pill.appendChild(home);
+
+  // FINAL BUG
+  if (stateCode === 2) {
+    const f = document.createElement('span');
+    f.className = 'final';
+    f.textContent = 'FINAL';
+    pill.appendChild(f);
+  }
+
+  // NETWORKS (ONLY FOR FUTURE GAMES)
+  if (stateCode === 0 && Array.isArray(item.networks) && item.networks.length) {
+    const nets = document.createElement('span');
+    nets.className = 'networks';
+    for (const name of item.networks) {
+      const logoUrl = NETWORK_LOGOS[name];
+      if (logoUrl) {
+        const img = document.createElement('img');
+        img.className = 'network-logo';
+        img.src = logoUrl;
+        img.alt = name;
+        img.onerror = () => { img.remove(); };
+        nets.appendChild(img);
+      } else {
+        const span = document.createElement('span');
+        span.className = 'network-text';
+        span.textContent = name;
+        nets.appendChild(span);
+      }
+    }
+    pill.appendChild(nets);
+  }
+
+  return pill;
+}
+
+function createHeaderPill(text, leagueKey) {
+  const pill = document.createElement('span');
+  pill.className = 'pill header-pill';
+  pill.textContent = text;
+  pill.classList.add(`league-${leagueKey}`);
+  return pill;
+}
+
+function buildRailFragment(list) {
+  const frag = document.createDocumentFragment();
+  for (const it of list) {
+    if (it.type === 'roundHeader') {
+      frag.appendChild(createHeaderPill(it.header, it.leagueKey || 'nfl'));
+      continue;
+    }
+    const p = createPill(it);
+    frag.appendChild(p);
+  }
+  return frag;
+}
+
+function detectScoreChanges(list) {
+  const changedKeys = [];
+  const newMap = new Map();
+  for (const it of list) {
+    if (it.type === 'roundHeader') continue;
+    const k = scoreKey(it);
+    const scoreStr = `${it.away.score || '-'}-${it.home.score || '-'}`;
+    newMap.set(k, scoreStr);
+    const old = previousScoreMap.get(k);
+    if (old && old !== scoreStr) changedKeys.push(k);
+  }
+  previousScoreMap = newMap;
+  return changedKeys;
+}
+
+/* SCROLL ENGINE */
+let raf = null;
+let lastTs = null;
+let x = 0;
+let railWidth = 0;
+let viewportWidth = 0;
+let speedPxPerSec = 0;
+
+function stopScroll() {
+  if (raf) cancelAnimationFrame(raf);
+  raf = null;
+  lastTs = null;
+}
+
+function measureRailWidth() {
+  let width = 0;
+  const children = Array.from(rail.children);
+  for (const child of children) {
+    if (child.classList.contains("loop-spacer")) break;
+    width += child.getBoundingClientRect().width;
+  }
+  return width;
+}
+
+function ensureRailDuplicated() {
+  if (!rail.dataset.duplicated) {
+    const frag = document.createDocumentFragment();
+    const children = Array.from(rail.children);
+    for (const c of children) {
+      frag.appendChild(c.cloneNode(true));
+    }
+    rail.appendChild(frag);
+    rail.dataset.duplicated = "1";
+  }
+}
+
+function startScrollLoop() {
+  stopScroll();
+
+  viewportWidth = document.querySelector('.rail-viewport').clientWidth;
+
+  const oldSpacers = rail.querySelectorAll('.loop-spacer');
+  oldSpacers.forEach(s => s.remove());
+
+  railWidth = measureRailWidth();
+  if (railWidth <= 0) return;
+
+  const pad = Math.max(MIN_PADDING, Math.round(viewportWidth * 0.4));
+  const spacer = document.createElement('span');
+  spacer.style.display = 'inline-block';
+  spacer.style.width = pad + 'px';
+  spacer.className = 'loop-spacer';
+  rail.appendChild(spacer);
+
+  railWidth = measureRailWidth();
+
+  speedPxPerSec = Math.max(60, (railWidth + viewportWidth) / Math.max(8, TARGET_LOOP_SECONDS));
+  speedPxPerSec = Math.min(Math.max(speedPxPerSec, 70), 220);
+
+  ensureRailDuplicated();
+
+  x = 0;
+  rail.style.transform = "translateX(0px)";
+  lastTs = null;
+
+  function frame(ts) {
+    if (!lastTs) lastTs = ts;
+    const dt = (ts - lastTs) / 1000;
+    lastTs = ts;
+
+    x -= speedPxPerSec * dt;
+
+    if (Math.abs(x) >= railWidth) {
+      x += railWidth;
+    }
+
+    rail.style.transform = `translateX(${x}px)`;
+    raf = requestAnimationFrame(frame);
+  }
+
+  raf = requestAnimationFrame(frame);
+}
+
+function rebuildRail(list) {
+  stopScroll();
+  rail.innerHTML = '';
+  rail.dataset.duplicated = '';
+  const frag = buildRailFragment(list);
+  rail.appendChild(frag);
+}
+
+/* UPDATE LOOP */
+async function updateAndRun() {
+  try {
+    const list = await fetchScores();
+    const changedKeys = detectScoreChanges(list);
+
+    rebuildRail(list);
+
+    if (changedKeys.length) {
+      for (const key of changedKeys) {
+        const pill = rail.querySelector(`.pill[data-key="${cssEscape(key)}"]`);
+        if (pill) {
+          pill.classList.add('score-flash');
+          setTimeout(() => pill.classList.remove('score-flash'), 1100);
+        }
+      }
+    }
+
+    setTimeout(startScrollLoop, 80);
+  } catch (err) {
+    console.error('updateAndRun error', err);
+  }
+}
+
+function cssEscape(str) {
+  return String(str).replace(/["\\]/g, '\\$&');
+}
+
+updateAndRun();
+setInterval(updateAndRun, REFRESH_MS);
+</script>
+</body>
+</html>
