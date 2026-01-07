@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Sports Scores Ticker</title>
+<title>Sports Scores Ticker (PST Forced)</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
 
 <style>
 html, body {
@@ -13,6 +14,7 @@ html, body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* Ticker container */
 .ticker-wrap {
   position: fixed;
   bottom: 0;
@@ -23,6 +25,8 @@ html, body {
   align-items: center;
   overflow: hidden;
   transition: opacity 0.8s ease;
+  padding-left: 12px;
+  box-sizing: border-box;
 }
 
 .ticker-wrap.hidden {
@@ -33,7 +37,7 @@ html, body {
 .ticker {
   white-space: nowrap;
   padding-left: 100%;
-  font-size: 28px;
+  font-size: 28px; /* original size */
   color: white;
   opacity: 0;
 }
@@ -51,41 +55,115 @@ html, body {
   to { transform: translateX(-100%); }
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
 
-@keyframes fadeOut {
-  from { opacity: 1; }
-  to { opacity: 0; }
-}
-
+/* LIVE badge */
 .live {
   color: #00ff7f;
   font-weight: bold;
+  animation: livePulse 1.6s infinite;
 }
 
-.separator {
-  margin: 0 18px;
-  color: white;
+@keyframes livePulse {
+  0% { text-shadow: 0 0 0 rgba(0,255,127,0); }
+  50% { text-shadow: 0 0 8px rgba(0,255,127,0.35); }
+  100% { text-shadow: 0 0 0 rgba(0,255,127,0); }
 }
+
+/* PREMIUM separator */
+.separator {
+  display: inline-block;
+  width: 5px;
+  height: 58px; /* matches pill height */
+  margin: 0 22px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.95), rgba(255,255,255,0.45));
+  border-radius: 5px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.45), 0 0 10px rgba(255,255,255,0.08) inset;
+  vertical-align: middle;
+  transform: translateY(2px);
+}
+
+/* Team logos (15% larger) */
+.team-logo {
+  height: 22px;
+  transform: scale(1.15);
+  transform-origin: center;
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+.team-logo.right {
+  margin-left: 6px;
+  margin-right: 0;
+}
+
+/* GAME PILL — 28px text, matched height */
+.game-pill {
+  padding: 10px 16px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  color: #fff;
+  font-size: 28px; /* match original */
+  min-height: 58px; /* matches separator */
+  box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+  line-height: 1;
+}
+
+/* ROUND PILL — same size as game pill */
+.round-pill {
+  padding: 10px 16px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 28px; /* match game pill */
+  font-weight: 700;
+  color: #fff;
+  min-height: 58px;
+  margin: 0 10px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+}
+
+/* Round emblem — scaled to match logos */
+.round-pill .round-icon {
+  width: 36px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  flex: 0 0 36px;
+  background: rgba(255,255,255,0.12);
+  box-shadow: inset 0 -2px 6px rgba(0,0,0,0.25);
+}
+
+/* Round color themes */
+.round-wildcard { background: linear-gradient(135deg,#2b8cff,#1a6bff); }
+.round-divisional { background: linear-gradient(135deg,#ff7a2b,#ff4b1a); }
+.round-conference { background: linear-gradient(135deg,#7b2bff,#4b1aff); }
+.round-super { background: linear-gradient(135deg,#ffd700,#ffb400); }
+
+img.team-logo { object-fit: contain; }
 </style>
 </head>
 
 <body>
 <div class="ticker-wrap" id="tickerWrap">
-  <div class="ticker" id="ticker">Loading today’s scores…</div>
+  <div class="ticker" id="ticker">Loading…</div>
 </div>
 
 <script>
+/* CONFIG */
+const PAUSE_BETWEEN_LOOPS = 3000;
 const leagues = [
   { name: "NFL", url: "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard" },
   { name: "NBA", url: "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard" },
   { name: "MLB", url: "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard" },
   { name: "NHL", url: "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard" }
 ];
-
 const leagueColors = {
   NFL: "#013369",
   NBA: "#17408B",
@@ -93,81 +171,187 @@ const leagueColors = {
   NHL: "#111111"
 };
 
-const PAUSE_BETWEEN_LOOPS = 3000;
+/* HELPERS */
+function safe(o,p,f=""){try{return p.split(".").reduce((x,k)=>x?.[k],o)??f;}catch{return f;}}
 
-async function fetchScores() {
-  const segments = [];
+/* FORCE PACIFIC TIME */
+function pstTimestamp(iso) {
+  try {
+    return new Date(
+      new Date(iso).toLocaleString("en-US", { timeZone: "America/Los_Angeles" })
+    ).getTime();
+  } catch {
+    return 0;
+  }
+}
 
-  for (const league of leagues) {
-    try {
-      const proxyUrl =
-        "https://api.allorigins.win/raw?url=" +
-        encodeURIComponent(league.url);
+function formatPST(iso){
+  try{
+    const d=new Date(
+      new Date(iso).toLocaleString("en-US",{timeZone:"America/Los_Angeles"})
+    );
+    return d.toLocaleString("en-US",{
+      month:"numeric",
+      day:"numeric",
+      hour:"numeric",
+      minute:"2-digit",
+      hour12:true
+    }).replace(",","");
+  }catch{return"";}
+}
 
-      const res = await fetch(proxyUrl);
-      const data = await res.json();
+function imgOrPlaceholder(src,alt="",right=false){
+  if(!src){
+    return `<span class="team-logo${right?" right":""}">
+      <svg width="28" height="22"><rect width="28" height="22" rx="4" fill="#444"/></svg>
+    </span>`;
+  }
+  return `<img src="${src}" class="team-logo${right?" right":""}" alt="${alt}">`;
+}
 
-      // Regular season (2) + Playoffs (3)
-      const events = (data.events || []).filter(
-        e => e.season?.type === 2 || e.season?.type === 3
-      );
+/* ROUND META */
+function roundMeta(t){
+  t=(t||"").toLowerCase();
+  if(t.includes("wild")) return {cls:"round-wildcard",label:"Wild Card"};
+  if(t.includes("divis")) return {cls:"round-divisional",label:"Divisional"};
+  if(t.includes("conf")) return {cls:"round-conference",label:"Conference"};
+  if(t.includes("super")) return {cls:"round-super",label:"Super Bowl"};
+  return {cls:"round-wildcard",label:t||"Playoffs"};
+}
 
-      events.forEach(event => {
-        const comp = event.competitions[0];
-        const away = comp.competitors.find(t => t.homeAway === "away");
-        const home = comp.competitors.find(t => t.homeAway === "home");
-        const status = comp.status.type;
+function buildRoundPill(text){
+  const m=roundMeta(text);
+  const emblem=`<svg width="36" height="28" viewBox="0 0 36 28">
+    <rect width="36" height="28" rx="6" fill="rgba(255,255,255,0.12)"/>
+    <g transform="translate(8,6)" fill="white" opacity="0.95">
+      <circle cx="5" cy="5" r="4"></circle>
+      <rect x="14" y="3" width="10" height="6" rx="2"></rect>
+    </g>
+  </svg>`;
+  return `<span class="round-pill ${m.cls}"><span class="round-icon">${emblem}</span>${m.label}</span>`;
+}
 
-        const isLive = status.state === "in";
-        const statusText = isLive ? "LIVE" : status.shortDetail;
+/* FETCH WITH FALLBACK */
+async function fetchJson(url){
+  try{const r=await fetch(url);if(r.ok)return r.json();}catch{}
+  try{const r=await fetch("https://api.allorigins.win/raw?url="+encodeURIComponent(url));if(r.ok)return r.json();}catch{}
+  return null;
+}
 
-        const color = leagueColors[league.name] || "#222";
+/* MAIN FETCH */
+let LAST=null, TS=0;
+async function fetchScores(){
+  if(LAST && Date.now()-TS<30000){startTicker(buildTickerHtml(LAST));return;}
 
-        segments.push(`
-          <span style="background:${color}; padding: 6px 12px; border-radius: 6px;">
-            <img src="${away.team.logo}" style="height:22px; vertical-align:middle; margin-right:6px;">
-            ${away.team.abbreviation} ${away.score}
-            –
-            ${home.score} ${home.team.abbreviation}
-            <img src="${home.team.logo}" style="height:22px; vertical-align:middle; margin-left:6px;">
-            <span class="${isLive ? 'live' : ''}">(${statusText})</span>
-          </span>
-        `);
-      });
+  const seg=[], pg={};
 
-    } catch (err) {
-      console.error(err);
+  for(const lg of leagues){
+    const data=await fetchJson(lg.url);
+    if(!data) continue;
+
+    const events=(data.events||[]).filter(e=>[2,3].includes(safe(e,"season.type",0)));
+
+    for(const ev of events){
+      const comp=safe(ev,"competitions.0",null);
+      if(!comp) continue;
+
+      const away=comp.competitors.find(t=>t.homeAway==="away");
+      const home=comp.competitors.find(t=>t.homeAway==="home");
+      if(!away||!home) continue;
+
+      const iso=ev.date||comp.date;
+      const kickoff=formatPST(iso);
+
+      /* PST LIVE detection */
+      const nowPST=pstTimestamp(Date.now());
+      const startPST=pstTimestamp(iso);
+      const endPST=startPST+3*60*60*1000;
+      const isLive=nowPST>=startPST && nowPST<=endPST;
+
+      const status=safe(comp,"status.type",{});
+      const statusText=isLive?"LIVE":safe(status,"shortDetail","");
+
+      const networkObj=(safe(comp,"broadcasts",[])||[]).find(b=>b.market==="national")||safe(comp,"broadcasts.0",{});
+      const network=networkObj?.names?.join(", ")||networkObj?.name||"";
+
+      const item={
+        league:lg.name,
+        leagueColor:leagueColors[lg.name],
+        isPlayoff:safe(ev,"season.type",0)===3,
+        round:safe(comp,"notes.0.headline",""),
+        iso,kickoff,network,
+        away:{abbr:away.team.abbreviation,logo:away.team.logo,score:away.score},
+        home:{abbr:home.team.abbreviation,logo:home.team.logo,score:home.score},
+        isLive,statusText
+      };
+
+      if(item.isPlayoff){
+        pg[item.round]=pg[item.round]||[];
+        pg[item.round].push(item);
+      } else seg.push(item);
     }
   }
 
-  const tickerWrap = document.getElementById("tickerWrap");
-
-  if (segments.length === 0) {
-    tickerWrap.classList.add("hidden");
-  } else {
-    tickerWrap.classList.remove("hidden");
+  const list=[];
+  const rounds=Object.keys(pg).sort();
+  for(const r of rounds){
+    list.push({header:r});
+    list.push(...pg[r].sort((a,b)=>pstTimestamp(a.iso)-pstTimestamp(b.iso)));
   }
 
-  startTicker(
-    segments.length
-      ? segments.join('<span class="separator">|</span>')
-      : ""
-  );
+  if(seg.length){
+    list.push({header:"Regular"});
+    list.push(...seg.sort((a,b)=>pstTimestamp(a.iso)-pstTimestamp(b.iso)));
+  }
+
+  LAST=list; TS=Date.now();
+  startTicker(buildTickerHtml(list));
 }
 
-function startTicker(content) {
-  const ticker = document.getElementById("ticker");
+/* BUILD HTML */
+function buildTickerHtml(list){
+  if(!list.length) return "";
+  const out=[];
+  for(const it of list){
+    if(it.header){ out.push(buildRoundPill(it.header)); continue; }
 
-  ticker.className = "ticker";
-  ticker.innerHTML = content;
+    const awayImg=imgOrPlaceholder(it.away.logo,it.away.abbr,false);
+    const homeImg=imgOrPlaceholder(it.home.logo,it.home.abbr,true);
+    const score=(it.away.score||it.home.score)?`${it.away.score} – ${it.home.score}`:it.kickoff;
+    const net=it.network?` • ${it.network}`:"";
 
-  void ticker.offsetWidth;
+    out.push(`
+      <span class="game-pill" style="background:${it.leagueColor};">
+        ${awayImg}
+        <strong>${it.away.abbr}</strong>
+        <span style="opacity:0.95;">${score}</span>
+        <strong>${it.home.abbr}</strong>
+        ${homeImg}
+        <span class="${it.isLive?"live":""}" style="opacity:0.9;">${it.statusText}${net}</span>
+      </span>
+    `);
+  }
+  return out.join('<span class="separator"></span>');
+}
 
-  if (content !== "") {
-    ticker.classList.add("scroll");
+/* START TICKER */
+function startTicker(content){
+  const wrap=document.getElementById("tickerWrap");
+  const t=document.getElementById("ticker");
+
+  if(!content){
+    wrap.classList.add("hidden");
+    t.innerHTML="No games available";
+    return;
   }
 
-  setTimeout(fetchScores, 70000 + PAUSE_BETWEEN_LOOPS);
+  wrap.classList.remove("hidden");
+  t.className="ticker";
+  t.innerHTML=content;
+  void t.offsetWidth;
+  t.classList.add("scroll");
+
+  setTimeout(fetchScores,70000+PAUSE_BETWEEN_LOOPS);
 }
 
 fetchScores();
