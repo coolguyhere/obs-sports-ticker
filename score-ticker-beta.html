@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>ESPN-style Live Ticker (ESPN + proxy, seamless loop, flashes)</title>
+<title>ESPN-style Live Ticker (PST, ESPN layout)</title>
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 
 <style>
@@ -71,6 +71,15 @@
     transition: box-shadow 200ms ease;
   }
 
+  /* header pill (Wild Card / Divisional / Regular) */
+  .pill.header-pill {
+    background: rgba(255,255,255,0.12);
+    border-left-color: var(--espn-red);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: calc(var(--bar-h) * 0.22);
+  }
+
   .pill .team {
     display:inline-flex; align-items:center; gap:8px; text-transform:uppercase;
     font-size: calc(var(--bar-h) * 0.28);
@@ -109,9 +118,6 @@
     border-radius:3px;
   }
 
-  /* separator (small dash) */
-  .pill .sep { color: rgba(255,255,255,0.72); font-weight:900; margin: 0 4px; }
-
   /* subtle flash when score changes */
   .pill.score-flash {
     box-shadow: 0 6px 18px rgba(0,0,0,0.45), 0 0 14px rgba(255,255,255,0.04) inset;
@@ -143,7 +149,7 @@
 /* ===========================
    Config
    =========================== */
-const TARGET_LOOP_SECONDS = 36; // ESPN-like full loop target (you can adjust)
+const TARGET_LOOP_SECONDS = 36; // ESPN-like full loop target
 const MIN_PADDING = 600;        // minimum extra blank px to pad to ensure movement
 const REFRESH_MS = 45_000;      // fetch every 45s
 const LEAGUES = [
@@ -174,6 +180,7 @@ async function fetchJson(url) {
   return null;
 }
 
+/* A1: real PST from ESPN UTC */
 function pstTimestamp(iso) {
   try {
     if (!iso) return 0;
@@ -188,7 +195,14 @@ function formatPST(iso) {
     if (!iso) return "";
     const d = new Date(iso);
     const local = new Date(d.toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
-    return local.toLocaleString("en-US", { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true }).replace(",", "");
+    const base = local.toLocaleString("en-US", {
+      month: "numeric",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true
+    }).replace(",", "");
+    return base + " PST";
   } catch { return ""; }
 }
 
@@ -323,18 +337,21 @@ function createPill(item) {
   away.appendChild(aText);
   pill.appendChild(away);
 
-  // separator dash & score
+  // score block
   const score = document.createElement('span'); score.className = 'score';
   const main = document.createElement('span'); main.className = 'main'; main.textContent = `${item.away.score || '-'} – ${item.home.score || '-'}`;
   score.appendChild(main);
   const sub = document.createElement('span'); sub.className = 'sub';
-  // use kickoff if not live and not final
-  if (item.isLive) sub.textContent = item.statusText || 'LIVE';
-  else sub.textContent = item.kickoff || item.statusText || item.network || '';
+  if (item.isLive) {
+    sub.textContent = item.statusText || 'LIVE';
+  } else {
+    // kickoff (already includes " PST"), or fallback to status/network
+    sub.textContent = item.kickoff || item.statusText || item.network || '';
+  }
   score.appendChild(sub);
   pill.appendChild(score);
 
-  // home
+  // home team
   const home = document.createElement('span'); home.className = 'team';
   const hText = document.createElement('span'); hText.textContent = item.home.abbr || '';
   home.appendChild(hText);
@@ -352,11 +369,22 @@ function createPill(item) {
   return pill;
 }
 
-/* assemble rail from list (no league headers per user) */
+/* create header pill for round/regular labels */
+function createHeaderPill(text) {
+  const pill = document.createElement('span');
+  pill.className = 'pill header-pill';
+  pill.textContent = text.toUpperCase();
+  return pill;
+}
+
+/* assemble rail from list */
 function buildRailFragment(list) {
   const frag = document.createDocumentFragment();
   for (const it of list) {
-    if (it.type === 'roundHeader') continue; // skip league/round headers per latest ask
+    if (it.type === 'roundHeader') {
+      frag.appendChild(createHeaderPill(it.header));
+      continue;
+    }
     const p = createPill(it);
     frag.appendChild(p);
   }
@@ -400,19 +428,22 @@ function startScrollLoop() {
   stopScroll();
   // measure
   viewportWidth = document.querySelector('.rail-viewport').clientWidth;
-  // railWidth should be width of one copy
-  const single = document.querySelector('.rail .pill') ? measureSingleRailWidth() : 0;
-  railWidth = measureRailWidth(); // total width of single rail content (we'll duplicate)
+
+  // clear any old spacer
+  const oldSpacers = rail.querySelectorAll('.loop-spacer');
+  oldSpacers.forEach(s => s.remove());
+
+  // measure width of first copy (before duplication)
+  railWidth = measureRailWidth();
   if (railWidth <= 0) return;
 
   // Add padding so even short rails scroll well
   const pad = Math.max(MIN_PADDING, Math.round(viewportWidth * 0.4));
-  // We'll append an empty spacer element at end of first rail to pad loop
   const spacer = document.createElement('span');
   spacer.style.display = 'inline-block';
   spacer.style.width = pad + 'px';
   spacer.className = 'loop-spacer';
-  document.querySelector('.rail').appendChild(spacer);
+  rail.appendChild(spacer);
 
   // recompute after pad
   railWidth = measureRailWidth();
@@ -448,16 +479,13 @@ function startScrollLoop() {
 
 /* measure rail single width (content before duplication) */
 function measureRailWidth() {
-  // measure the width of the first copy (stop at the first .loop-spacer if present)
+  let width = 0;
   const children = Array.from(rail.children);
-  if (children.length === 0) return 0;
-  // If we previously duplicated, children contains two copies. We'll measure first group's width by summing until halfway where duplicate starts.
-  // Simpler: wrap rail content in a temporary container clone and measure its scrollWidth.
-  // Create a clone of first rail with same children until midpoint
-  const clone = rail.cloneNode(true);
-  // remove trailing duplicate if any duplicate marker exists (we use .duplicated flag)
-  const firstWidth = clone.scrollWidth;
-  return firstWidth;
+  for (const child of children) {
+    if (child.classList.contains("loop-spacer")) break;
+    width += child.getBoundingClientRect().width;
+  }
+  return width;
 }
 
 function measureSingleRailWidth() {
@@ -466,9 +494,7 @@ function measureSingleRailWidth() {
 
 /* ensure we have duplicated content so we can wrap seamlessly */
 function ensureRailDuplicated() {
-  // If rail has children duplicated (we check data attribute), ensure it is duplicated once.
   if (!rail.dataset.duplicated) {
-    // clone current children into an appended copy
     const frag = document.createDocumentFragment();
     const children = Array.from(rail.children);
     for (const c of children) {
@@ -482,13 +508,10 @@ function ensureRailDuplicated() {
 /* clear duplicate and rebuild when content changes */
 function rebuildRail(list) {
   stopScroll();
-  // clear
   rail.innerHTML = '';
   rail.dataset.duplicated = '';
-  // build fragment for single rail
   const frag = buildRailFragment(list);
   rail.appendChild(frag);
-  // do not duplicate here; startScrollLoop will duplicate
 }
 
 /* ===========================
@@ -498,13 +521,10 @@ function rebuildRail(list) {
 async function updateAndRun() {
   try {
     const list = await fetchScores();
-    // detect score changes before we rebuild (previousScoreMap contains last loop's values)
     const changedKeys = detectScoreChanges(list);
 
-    // rebuild rail with new items (no headers per user)
     rebuildRail(list);
 
-    // after building, if there were changed keys, temporarily mark pills
     if (changedKeys.length) {
       for (const key of changedKeys) {
         const pill = rail.querySelector(`.pill[data-key="${cssEscape(key)}"]`);
@@ -515,8 +535,6 @@ async function updateAndRun() {
       }
     }
 
-    // start scrolling
-    // small delay to ensure DOM paints
     setTimeout(startScrollLoop, 80);
   } catch (err) {
     console.error('updateAndRun error', err);
@@ -531,7 +549,6 @@ function cssEscape(str) {
 /* bootstrap */
 updateAndRun();
 setInterval(updateAndRun, REFRESH_MS);
-
 </script>
 </body>
 </html>
