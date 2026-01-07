@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="utf-8" />
   <title>Sports Scores Ticker</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
@@ -76,10 +76,15 @@
       100% { text-shadow: 0 0 0 rgba(0,255,127,0.0); }
     }
 
+    /* Improved separator: subtle vertical bar with shadow */
     .separator {
-      margin: 0 18px;
-      color: white;
       display: inline-block;
+      width: 2px;
+      height: 28px;
+      margin: 0 18px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.85), rgba(255,255,255,0.35));
+      border-radius: 2px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.35);
       vertical-align: middle;
     }
 
@@ -108,15 +113,38 @@
       font-size: 18px;
     }
 
-    /* Header style used inline but defined here for convenience */
-    .round-header {
+    /* Round pill styling */
+    .round-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: 999px;
       font-weight: 700;
-      margin: 0 12px;
       color: #fff;
-      display: inline-block;
+      font-size: 16px;
+      margin: 0 10px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.35);
       vertical-align: middle;
-      font-size: 20px;
     }
+
+    .round-pill .round-icon {
+      width: 20px;
+      height: 20px;
+      display: inline-block;
+      border-radius: 50%;
+      flex: 0 0 20px;
+      box-shadow: inset 0 -2px 6px rgba(0,0,0,0.25);
+    }
+
+    /* Round color map */
+    .round-wildcard { background: linear-gradient(135deg,#2b8cff,#1a6bff); }
+    .round-divisional { background: linear-gradient(135deg,#ff7a2b,#ff4b1a); }
+    .round-conference { background: linear-gradient(135deg,#7b2bff,#4b1aff); }
+    .round-super { background: linear-gradient(135deg,#ffd700,#ffb400); }
+
+    /* Header style fallback */
+    .round-header { display:none; }
 
     /* Hide images that fail to load gracefully */
     img.team-logo { object-fit: contain; }
@@ -170,32 +198,43 @@
 
     function imgOrPlaceholder(src, alt = "", isRight = false) {
       if (!src) {
-        // placeholder wrapped in a span so CSS class applies
         return `<span class="team-logo${isRight ? " right" : ""}" style="display:inline-block;">
           <svg width="28" height="18" viewBox="0 0 28 18" xmlns="http://www.w3.org/2000/svg" style="display:block;">
             <rect width="28" height="18" rx="3" fill="#444"/>
           </svg>
         </span>`;
       }
-      // real image uses the class
-      // add team-logo class and alt for accessibility
       return `<img src="${src}" class="team-logo${isRight ? " right" : ""}" alt="${alt}">`;
+    }
+
+    // Map round text to pill class and label
+    function roundMeta(roundText) {
+      const t = (roundText || "").toLowerCase();
+      if (t.includes("wild")) return { cls: "round-wildcard", label: "Wild Card" };
+      if (t.includes("divis")) return { cls: "round-divisional", label: "Divisional" };
+      if (t.includes("conf") || t.includes("conference")) return { cls: "round-conference", label: "Conference" };
+      if (t.includes("super") || t.includes("super bowl")) return { cls: "round-super", label: "Super Bowl" };
+      // fallback
+      return { cls: "round-wildcard", label: roundText || "Playoffs" };
+    }
+
+    // Build round pill HTML with small emblem
+    function buildRoundPill(roundText) {
+      const meta = roundMeta(roundText);
+      // small emblem: simple SVG with two-tone circle
+      const emblem = `<span class="round-icon" aria-hidden="true" style="background:linear-gradient(135deg, rgba(255,255,255,0.18), rgba(255,255,255,0.06));"></span>`;
+      return `<span class="round-pill ${meta.cls}" role="note" aria-label="${meta.label}">${emblem}<span>${meta.label}</span></span>`;
     }
 
     // --- resilient fetch with proxy fallback ---
     async function fetchJsonWithFallback(url) {
-      // try direct
       try {
         const r = await fetch(url, { cache: "no-store" });
         if (r.ok) {
           const j = await r.json();
           return { ok: true, json: j, source: "direct" };
         }
-      } catch (e) {
-        // ignore, try proxy
-      }
-
-      // proxy fallback (allorigins)
+      } catch (e) {}
       try {
         const proxy = "https://api.allorigins.win/raw?url=" + encodeURIComponent(url);
         const r2 = await fetch(proxy);
@@ -203,17 +242,14 @@
           const j2 = await r2.json();
           return { ok: true, json: j2, source: "proxy" };
         }
-      } catch (e) {
-        // final failure
-      }
-
+      } catch (e) {}
       return { ok: false };
     }
 
     // --- main robust fetch + render ---
     let LAST_FETCH_TS = 0;
     let LAST_DATA = null;
-    const CACHE_TTL = 30 * 1000; // 30s cache to avoid duplicate fetches during animation
+    const CACHE_TTL = 30 * 1000;
 
     async function fetchScores() {
       const now = Date.now();
@@ -223,20 +259,16 @@
       }
 
       const segments = [];
-      const playoffGroups = {}; // group by round for playoffs
+      const playoffGroups = {};
 
       for (const league of leagues) {
         try {
           const res = await fetchJsonWithFallback(league.url);
           if (!res.ok || !res.json) continue;
-
           console.debug('fetch source', league.name, res.source);
 
           const data = res.json;
-          const events = (data.events || []).filter(e => {
-            // include regular season (2) and postseason (3)
-            return [2, 3].includes(safe(e, "season.type", 0));
-          });
+          const events = (data.events || []).filter(e => [2,3].includes(safe(e, "season.type", 0)));
 
           for (const event of events) {
             const comp = safe(event, "competitions.0", null);
@@ -296,10 +328,7 @@
         }
       }
 
-      // Build ordered list: playoffs grouped by round (sorted by date), then regular games by date
       const finalList = [];
-
-      // add playoff rounds in alphabetical order (stable ordering)
       const rounds = Object.keys(playoffGroups).sort((a,b) => a.localeCompare(b));
       for (const r of rounds) {
         const arr = playoffGroups[r].sort((x,y) => {
@@ -311,7 +340,6 @@
         finalList.push(...arr);
       }
 
-      // add regular games sorted by date
       const regularSorted = segments.sort((a,b) => {
         const ta = a.iso ? new Date(a.iso).getTime() : Infinity;
         const tb = b.iso ? new Date(b.iso).getTime() : Infinity;
@@ -322,19 +350,12 @@
         finalList.push(...regularSorted);
       }
 
-      // dedupe by iso + teams
       const seen = new Set();
       const deduped = [];
       for (const it of finalList) {
-        if (it.header) {
-          deduped.push(it);
-          continue;
-        }
+        if (it.header) { deduped.push(it); continue; }
         const key = `${it.iso}|${it.away.abbr}|${it.home.abbr}`;
-        if (!seen.has(key)) {
-          seen.add(key);
-          deduped.push(it);
-        }
+        if (!seen.has(key)) { seen.add(key); deduped.push(it); }
       }
 
       LAST_FETCH_TS = Date.now();
@@ -349,7 +370,8 @@
       const parts = [];
       for (const item of list) {
         if (item.header) {
-          parts.push(`<span class="round-header">${item.header}</span>`);
+          // render round pill with color and emblem
+          parts.push(buildRoundPill(item.header));
           continue;
         }
 
@@ -374,7 +396,8 @@
         `);
       }
 
-      return parts.join('<span class="separator">|</span>');
+      // join with improved separator element
+      return parts.join('<span class="separator" aria-hidden="true"></span>');
     }
 
     function startTicker(content) {
@@ -394,7 +417,6 @@
       ticker.innerHTML = content || "No games available";
       void ticker.offsetWidth;
       if (content) ticker.classList.add("scroll");
-      // schedule next fetch after one full scroll + small pause
       setTimeout(fetchScores, 70000 + PAUSE_BETWEEN_LOOPS);
     }
 
