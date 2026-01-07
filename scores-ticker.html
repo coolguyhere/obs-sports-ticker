@@ -283,70 +283,78 @@ let CACHE = null, CACHE_TS = 0;
 
 async function fetchScores(){
   const now = Date.now();
-  if(CACHE && (now - CACHE_TS) < CACHE_TTL) return CACHE;
+  if (CACHE && (now - CACHE_TS) < CACHE_TTL) return CACHE;
 
   const allItems = [];
 
-  for(const lg of LEAGUES){
+  for (const lg of LEAGUES) {
     const leagueKey = lg.key.toLowerCase();
     const playoffGroups = {};
     const regulars = [];
 
-    try{
+    try {
       const data = await fetchJson(lg.url);
-      if(!data) continue;
+      if (!data) continue;
 
       const events = (data.events || []).slice();
-      for(const ev of events){
-        const seasonType = safe(ev,"season.type",0);
-        if(seasonType === 1) continue; // skip preseason
 
-        const comp = safe(ev,"competitions.0",null);
-        if(!comp) continue;
-        const away = (comp.competitors || []).find(t=>t.homeAway==="away");
-        const home = (comp.competitors || []).find(t=>t.homeAway==="home");
-        if(!away || !home) continue;
+      for (const ev of events) {
+
+        // --- UNIFIED SEASON FILTER ---
+        const seasonType = safe(ev, "season.type", 0);
+        // Only show regular season (2) or playoffs (3)
+        if (seasonType !== 2 && seasonType !== 3) continue;
+
+        const comp = safe(ev, "competitions.0", null);
+        if (!comp) continue;
+
+        const away = (comp.competitors || []).find(t => t.homeAway === "away");
+        const home = (comp.competitors || []).find(t => t.homeAway === "home");
+        if (!away || !home) continue;
 
         const iso = ev.date || comp.date || "";
-        if(!iso) continue;
+        if (!iso) continue;
 
         const ts = pstTimestamp(iso);
         const daysOut = (ts - Date.now()) / 86400000;
-        if(daysOut > 30) continue;
+        if (daysOut > 30) continue; // skip far-future games
 
         const kickoff = formatPST(iso);
 
-        const status = safe(comp,"status.type",{});
-        const state = safe(status,"state","");
+        const status = safe(comp, "status.type", {});
+        const state = safe(status, "state", "");
         const isLive = state === "in";
-        const statusText = isLive ? "LIVE" : (safe(status,"shortDetail","") || safe(status,"type.text","") || "");
-        const statusDetail = (safe(status,"type.detail","") || "").toUpperCase();
+        const statusText = isLive
+          ? "LIVE"
+          : (safe(status, "shortDetail", "") ||
+             safe(status, "type.text", "") ||
+             "");
 
-        const broadcasts = safe(comp,"broadcasts",[]) || safe(ev,"broadcasts",[]) || [];
+        const broadcasts = safe(comp, "broadcasts", []) || safe(ev, "broadcasts", []) || [];
         let networkNames = [];
-        if(Array.isArray(broadcasts) && broadcasts.length){
-          const nat = broadcasts.filter(b=>b.market==="national");
+        if (Array.isArray(broadcasts) && broadcasts.length) {
+          const nat = broadcasts.filter(b => b.market === "national");
           const use = nat.length ? nat : broadcasts;
-          for(const b of use){
-            if(Array.isArray(b.names)){
-              for(const nm of b.names){
-                if(nm && !networkNames.includes(nm)) networkNames.push(nm);
+          for (const b of use) {
+            if (Array.isArray(b.names)) {
+              for (const nm of b.names) {
+                if (nm && !networkNames.includes(nm)) networkNames.push(nm);
               }
-            }else if(b.name && !networkNames.includes(b.name)){
+            } else if (b.name && !networkNames.includes(b.name)) {
               networkNames.push(b.name);
             }
           }
         }
 
-        const awayLogo = safe(away,"team.logo", safe(away,"team.logos.0.href","")) || "";
-        const homeLogo = safe(home,"team.logo", safe(home,"team.logos.0.href","")) || "";
-        const awayAbbr = (safe(away,"team.abbreviation", safe(away,"team.displayName","")) || "").toUpperCase();
-        const homeAbbr = (safe(home,"team.abbreviation", safe(home,"team.displayName","")) || "").toUpperCase();
-        const awayScore = safe(away,"score","");
-        const homeScore = safe(home,"score","");
-        const isPlayoff = seasonType === 3;
-        const roundRaw = safe(comp,"notes.0.headline", safe(ev,"league.name","Playoffs"));
+        const awayLogo = safe(away, "team.logo", safe(away, "team.logos.0.href", "")) || "";
+        const homeLogo = safe(home, "team.logo", safe(home, "team.logos.0.href", "")) || "";
+        const awayAbbr = (safe(away, "team.abbreviation", safe(away, "team.displayName", "")) || "").toUpperCase();
+        const homeAbbr = (safe(home, "team.abbreviation", safe(home, "team.displayName", "")) || "").toUpperCase();
+        const awayScore = safe(away, "score", "");
+        const homeScore = safe(home, "score", "");
 
+        const isPlayoff = seasonType === 3;
+        const roundRaw = safe(comp, "notes.0.headline", safe(ev, "league.name", "Playoffs"));
         const round = normalizeRound(roundRaw);
 
         const item = {
@@ -361,58 +369,70 @@ async function fetchScores(){
           away: { abbr: awayAbbr, logo: awayLogo, score: awayScore },
           home: { abbr: homeAbbr, logo: homeLogo, score: homeScore },
           isLive,
-          statusText,
-          statusDetail
+          statusText
         };
 
+        // Future games show networks; live/final do not
         const stateCode = gameState(item);
-        if(stateCode === 0 && networkNames.length){
+        if (stateCode === 0 && networkNames.length) {
           item.networks = networkNames.slice();
-        }else{
-          item.networks = [];
         }
 
-        if(isPlayoff){
+        // --- GROUPING ---
+        if (isPlayoff) {
           playoffGroups[round] = playoffGroups[round] || [];
           playoffGroups[round].push(item);
-        }else{
+        } else {
           regulars.push(item);
         }
       }
 
+      // --- BUILD LEAGUE OUTPUT ---
       const leagueItems = [];
 
       const rounds = Object.keys(playoffGroups).sort();
-      for(const r of rounds){
+      for (const r of rounds) {
         const arr = playoffGroups[r].slice().sort(gameSort);
-        if(arr.length){
-          leagueItems.push({ type:"roundHeader", header:r, leagueKey });
+        if (arr.length) {
+          leagueItems.push({ type: "roundHeader", header: r, leagueKey });
           leagueItems.push(...arr);
         }
       }
 
       const regularSorted = regulars.slice().sort(gameSort);
-      if(regularSorted.length){
-        leagueItems.push({ type:"roundHeader", header:"Regular", leagueKey });
+      if (regularSorted.length) {
+        leagueItems.push({ type: "roundHeader", header: "Regular", leagueKey });
         leagueItems.push(...regularSorted);
       }
 
       allItems.push(...leagueItems);
-    }catch(err){
+
+    } catch (err) {
       console.error("League fetch error", lg.name, err);
     }
   }
 
-  const seen = new Set(); const dedup = [];
-  for(const it of allItems){
-    if(it.type === "roundHeader"){ dedup.push(it); continue; }
+  // --- DEDUP ---
+  const seen = new Set();
+  const dedup = [];
+
+  for (const it of allItems) {
+    if (it.type === "roundHeader") {
+      dedup.push(it);
+      continue;
+    }
     const key = `${it.iso}|${it.away.abbr}|${it.home.abbr}|${it.league}`;
-    if(!seen.has(key)){ seen.add(key); dedup.push(it); }
+    if (!seen.has(key)) {
+      seen.add(key);
+      dedup.push(it);
+    }
   }
 
-  CACHE = dedup; CACHE_TS = Date.now();
+  CACHE = dedup;
+  CACHE_TS = Date.now();
   return dedup;
 }
+
 
 function normalizeRound(raw){
   const t = (raw || "").toUpperCase();
@@ -724,3 +744,4 @@ bootstrapTicker();
 </script>
 </body>
 </html>
+
