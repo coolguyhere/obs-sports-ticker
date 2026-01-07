@@ -356,16 +356,22 @@ function safe(o, p, f=""){
 }
 
 async function fetchJson(url){
+  const proxy = "https://corsproxy.io/?";
+
   try{
-    const r = await fetch(url, { cache:"no-store" });
-    if(r.ok) return r.json();
-  }catch{}
-  try{
-    const r2 = await fetch("https://api.allorigins.win/raw?url=" + encodeURIComponent(url));
-    if(r2.ok) return r2.json();
-  }catch{}
+    const r = await fetch(proxy + encodeURIComponent(url), { cache:"no-store" });
+    if(r.ok){
+      return r.json();
+    } else {
+      console.error("Proxy fetch failed:", r.status, r.statusText);
+    }
+  }catch(e){
+    console.error("Proxy fetch error:", e);
+  }
+
   return null;
 }
+
 
 function pstTimestamp(iso){
   try{
