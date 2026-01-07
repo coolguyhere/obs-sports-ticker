@@ -621,41 +621,38 @@ function cssEscape(str){
 
 /* CONTINUOUS LOOP */
 function loopFrame(ts){
-  if(!lastTs) lastTs = ts;
+  if (!lastTs) lastTs = ts;
   const dt = (ts - lastTs) / 1000;
   lastTs = ts;
 
+  // move left
   x -= SPEED_PX_PER_SEC * dt;
   rail.style.transform = `translateX(${x}px)`;
 
   const viewport = document.querySelector(".rail-viewport");
   const vpRect = viewport.getBoundingClientRect();
 
-  let moved = false;
-  while(true){
-    const first = rail.firstElementChild;
-    if(!first) break;
-    const rect = first.getBoundingClientRect();
-    if(rect.right < vpRect.left){
-      rail.appendChild(first);
-      moved = true;
-    }else{
-      break;
-    }
-  }
+  // --- WRAP‑AROUND CORRECTION (one pill per frame) ---
+  const first = rail.firstElementChild;
+  if (first) {
+    const firstRect = first.getBoundingClientRect();
 
-  if(moved){
-    const newFirst = rail.firstElementChild;
-    if(newFirst){
-      const rect = newFirst.getBoundingClientRect();
-      const delta = vpRect.left - rect.left;
-      x += delta;
+    // if the first pill has fully exited left
+    if (firstRect.right < vpRect.left) {
+      const width = firstRect.width;
+
+      // move it to the end
+      rail.appendChild(first);
+
+      // correct scroll offset so the loop stays smooth
+      x += width;
       rail.style.transform = `translateX(${x}px)`;
     }
   }
 
   requestAnimationFrame(loopFrame);
 }
+
 
 /* MAIN */
 async function bootstrapTicker(){
