@@ -76,16 +76,17 @@
       100% { text-shadow: 0 0 0 rgba(0,255,127,0.0); }
     }
 
-    /* Improved separator: subtle vertical bar with shadow */
+    /* Separator: taller, rounded, subtle glow for premium look */
     .separator {
       display: inline-block;
-      width: 2px;
-      height: 28px;
-      margin: 0 18px;
-      background: linear-gradient(180deg, rgba(255,255,255,0.85), rgba(255,255,255,0.35));
-      border-radius: 2px;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+      width: 4px;
+      height: 36px;
+      margin: 0 20px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.95), rgba(255,255,255,0.45));
+      border-radius: 4px;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.45), 0 0 8px rgba(255,255,255,0.06) inset;
       vertical-align: middle;
+      transform: translateY(2px);
     }
 
     /* Team logo sizing: base height + 15% scale */
@@ -104,47 +105,54 @@
 
     /* Small pill tweaks for better legibility */
     .game-pill {
-      padding: 6px 12px;
-      border-radius: 6px;
+      padding: 8px 14px;
+      border-radius: 8px;
       display: inline-flex;
       align-items: center;
-      gap: 8px;
+      gap: 10px;
       color: #fff;
       font-size: 18px;
+      min-height: 44px;               /* ensure consistent height */
+      box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+      line-height: 1;
     }
 
-    /* Round pill styling */
+    /* Round pill styling: match game-pill sizing and logo scale */
     .round-pill {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
-      padding: 6px 10px;
-      border-radius: 999px;
+      gap: 10px;
+      padding: 8px 14px;
+      border-radius: 8px;
       font-weight: 700;
       color: #fff;
-      font-size: 16px;
-      margin: 0 10px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+      font-size: 18px;
+      margin: 0 8px;
+      min-height: 44px;               /* same as game-pill */
+      box-shadow: 0 6px 18px rgba(0,0,0,0.35);
       vertical-align: middle;
     }
 
     .round-pill .round-icon {
-      width: 20px;
-      height: 20px;
-      display: inline-block;
-      border-radius: 50%;
-      flex: 0 0 20px;
+      width: 28px;                    /* match visual scale of team-logo */
+      height: 22px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 6px;
+      flex: 0 0 28px;
+      background: rgba(255,255,255,0.12);
       box-shadow: inset 0 -2px 6px rgba(0,0,0,0.25);
     }
 
-    /* Round color map */
+    /* Round color map (kept bold and premium) */
     .round-wildcard { background: linear-gradient(135deg,#2b8cff,#1a6bff); }
     .round-divisional { background: linear-gradient(135deg,#ff7a2b,#ff4b1a); }
     .round-conference { background: linear-gradient(135deg,#7b2bff,#4b1aff); }
     .round-super { background: linear-gradient(135deg,#ffd700,#ffb400); }
 
-    /* Header style fallback */
-    .round-header { display:none; }
+    /* Accessibility / fallback */
+    .round-pill span.label { display:inline-block; vertical-align:middle; }
 
     /* Hide images that fail to load gracefully */
     img.team-logo { object-fit: contain; }
@@ -199,8 +207,8 @@
     function imgOrPlaceholder(src, alt = "", isRight = false) {
       if (!src) {
         return `<span class="team-logo${isRight ? " right" : ""}" style="display:inline-block;">
-          <svg width="28" height="18" viewBox="0 0 28 18" xmlns="http://www.w3.org/2000/svg" style="display:block;">
-            <rect width="28" height="18" rx="3" fill="#444"/>
+          <svg width="28" height="22" viewBox="0 0 28 22" xmlns="http://www.w3.org/2000/svg" style="display:block;">
+            <rect width="28" height="22" rx="4" fill="#444"/>
           </svg>
         </span>`;
       }
@@ -214,16 +222,21 @@
       if (t.includes("divis")) return { cls: "round-divisional", label: "Divisional" };
       if (t.includes("conf") || t.includes("conference")) return { cls: "round-conference", label: "Conference" };
       if (t.includes("super") || t.includes("super bowl")) return { cls: "round-super", label: "Super Bowl" };
-      // fallback
       return { cls: "round-wildcard", label: roundText || "Playoffs" };
     }
 
-    // Build round pill HTML with small emblem
+    // Build round pill HTML with emblem sized to match team logos
     function buildRoundPill(roundText) {
       const meta = roundMeta(roundText);
-      // small emblem: simple SVG with two-tone circle
-      const emblem = `<span class="round-icon" aria-hidden="true" style="background:linear-gradient(135deg, rgba(255,255,255,0.18), rgba(255,255,255,0.06));"></span>`;
-      return `<span class="round-pill ${meta.cls}" role="note" aria-label="${meta.label}">${emblem}<span>${meta.label}</span></span>`;
+      // emblem uses same visual scale as team-logo (28x22)
+      const emblemSvg = `<svg width="28" height="22" viewBox="0 0 28 22" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="0" y="0" width="28" height="22" rx="4" fill="rgba(255,255,255,0.12)"/>
+        <g transform="translate(6,4)" fill="white" opacity="0.95">
+          <circle cx="4" cy="4" r="3"></circle>
+          <rect x="10" y="2" width="6" height="4" rx="1"></rect>
+        </g>
+      </svg>`;
+      return `<span class="round-pill ${meta.cls}" role="note" aria-label="${meta.label}"><span class="round-icon">${emblemSvg}</span><span class="label">${meta.label}</span></span>`;
     }
 
     // --- resilient fetch with proxy fallback ---
@@ -370,7 +383,6 @@
       const parts = [];
       for (const item of list) {
         if (item.header) {
-          // render round pill with color and emblem
           parts.push(buildRoundPill(item.header));
           continue;
         }
@@ -396,7 +408,6 @@
         `);
       }
 
-      // join with improved separator element
       return parts.join('<span class="separator" aria-hidden="true"></span>');
     }
 
