@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Sports Scores Ticker</title>
+<title>Sports Scores Ticker (PST Forced)</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 
 <style>
@@ -173,7 +173,32 @@ const leagueColors = {
 
 /* HELPERS */
 function safe(o,p,f=""){try{return p.split(".").reduce((x,k)=>x?.[k],o)??f;}catch{return f;}}
-function formatPST(iso){try{const d=new Date(iso);return d.toLocaleString("en-US",{timeZone:"America/Los_Angeles",month:"numeric",day:"numeric",hour:"numeric",minute:"2-digit",hour12:true}).replace(",","");}catch{return"";}}
+
+/* FORCE PACIFIC TIME */
+function pstTimestamp(iso) {
+  try {
+    return new Date(
+      new Date(iso).toLocaleString("en-US", { timeZone: "America/Los_Angeles" })
+    ).getTime();
+  } catch {
+    return 0;
+  }
+}
+
+function formatPST(iso){
+  try{
+    const d=new Date(
+      new Date(iso).toLocaleString("en-US",{timeZone:"America/Los_Angeles"})
+    );
+    return d.toLocaleString("en-US",{
+      month:"numeric",
+      day:"numeric",
+      hour:"numeric",
+      minute:"2-digit",
+      hour12:true
+    }).replace(",","");
+  }catch{return"";}
+}
 
 function imgOrPlaceholder(src,alt="",right=false){
   if(!src){
@@ -235,10 +260,15 @@ async function fetchScores(){
       if(!away||!home) continue;
 
       const iso=ev.date||comp.date;
-      const kickoff=iso?formatPST(iso):"";
+      const kickoff=formatPST(iso);
+
+      /* PST LIVE detection */
+      const nowPST=pstTimestamp(Date.now());
+      const startPST=pstTimestamp(iso);
+      const endPST=startPST+3*60*60*1000;
+      const isLive=nowPST>=startPST && nowPST<=endPST;
 
       const status=safe(comp,"status.type",{});
-      const isLive=safe(status,"state","")==="in";
       const statusText=isLive?"LIVE":safe(status,"shortDetail","");
 
       const networkObj=(safe(comp,"broadcasts",[])||[]).find(b=>b.market==="national")||safe(comp,"broadcasts.0",{});
@@ -266,12 +296,12 @@ async function fetchScores(){
   const rounds=Object.keys(pg).sort();
   for(const r of rounds){
     list.push({header:r});
-    list.push(...pg[r].sort((a,b)=>new Date(a.iso)-new Date(b.iso)));
+    list.push(...pg[r].sort((a,b)=>pstTimestamp(a.iso)-pstTimestamp(b.iso)));
   }
 
   if(seg.length){
     list.push({header:"Regular"});
-    list.push(...seg.sort((a,b)=>new Date(a.iso)-new Date(b.iso)));
+    list.push(...seg.sort((a,b)=>pstTimestamp(a.iso)-pstTimestamp(b.iso)));
   }
 
   LAST=list; TS=Date.now();
