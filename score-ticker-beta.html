@@ -1,170 +1,154 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<meta charset="UTF-8" />
-<title>Sports Ticker</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Sports Ticker — Double Rail, No Hiccup, Super Bowl Theme</title>
 
 <style>
-:root {
+:root{
   --bar-h: 52px;
-  --bg: #111;
-  --text: #fff;
-  --pill-bg: #242424;
+  --bg: #0f0f10;
+  --text: #ffffff;
+  --pill-bg: #242424; /* Medium contrast */
   --pill-pad: 10px 18px;
   --sep: 22px;
   --round-bg: #222;
   --round-text: #fff;
   --font: 28px;
+  --pill-radius: 999px;
 }
 
-/* Container */
-body {
-  margin: 0;
-  background: #000;
-  font-family: Arial, sans-serif;
+/* Page */
+html,body{height:100%;margin:0;background:#000;font-family:Arial,Helvetica,sans-serif;color:var(--text);}
+
+/* Bottom pinned wrapper */
+.ticker-wrapper{
+  position:fixed;
+  left:0;
+  right:0;
+  bottom:0;
+  z-index:9999;
+  pointer-events:none;
 }
 
-/* Bottom-pinned ticker */
-.ticker-wrapper {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  z-index: 9999;
+/* Bar */
+.ticker-bar{
+  height:var(--bar-h);
+  background:var(--bg);
+  display:flex;
+  align-items:center;
+  border-top:3px solid #c00; /* default ESPN red stripe */
+  transition:background 300ms ease, border-top 300ms ease, box-shadow 300ms ease;
+  overflow:hidden;
+  pointer-events:auto;
 }
 
-.ticker-bar {
-  height: var(--bar-h);
-  background: var(--bg);
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  white-space: nowrap;
-  border-top: 3px solid #c00; /* default ESPN red stripe */
-  transition: border-top 0.3s ease, box-shadow 0.3s ease, background 0.3s ease;
+/* Viewport */
+.rail-viewport{
+  position:relative;
+  width:100%;
+  height:var(--bar-h);
+  overflow:hidden;
+  white-space:nowrap;
 }
 
-.rail-viewport {
-  overflow: hidden;
-  width: 100%;
-  height: var(--bar-h);
-}
-
-#rail,
-#rail-staging {
-  display: inline-flex;
-  align-items: center;
-  height: var(--bar-h);
-  will-change: transform;
+/* Two rails positioned absolutely for duplication */
+#rail, #rail-dup, #rail-staging {
+  position:absolute;
+  top:0;
+  left:0;
+  display:inline-flex;
+  align-items:center;
+  height:var(--bar-h);
+  will-change:transform;
 }
 
 /* Pills */
-.pill {
-  display: inline-flex;
-  align-items: center;
-  background: var(--pill-bg);
-  color: var(--text);
-  padding: var(--pill-pad);
-  margin-right: var(--sep);
-  border-radius: 999px;
-  font-size: var(--font);
-  height: calc(var(--bar-h) - 12px);
-  border: 1px solid rgba(255,255,255,0.12);
-  box-shadow: 0 0 6px rgba(0,0,0,0.45);
+.pill{
+  display:inline-flex;
+  align-items:center;
+  background:var(--pill-bg);
+  color:var(--text);
+  padding:var(--pill-pad);
+  margin-right:var(--sep);
+  border-radius:var(--pill-radius);
+  font-size:var(--font);
+  height:calc(var(--bar-h) - 12px);
+  border:1px solid rgba(255,255,255,0.12);
+  box-shadow:0 0 6px rgba(0,0,0,0.45);
 }
 
-.pill img.logo {
-  height: calc(var(--bar-h) * 0.55);
-  width: auto;
-  margin-right: 10px;
+/* Header pill */
+.header-pill{
+  background:var(--round-bg);
+  color:var(--round-text);
+  font-weight:700;
+  text-transform:uppercase;
 }
 
-/* Header pills */
-.header-pill {
-  background: var(--round-bg);
-  color: var(--round-text);
-  font-weight: bold;
-  text-transform: uppercase;
+/* Logos */
+.pill img.logo{ height:calc(var(--bar-h) * 0.55); width:auto; margin-right:10px; display:inline-block; }
+.team-logo{
+  height:calc(var(--bar-h) * 0.55);
+  width:auto;
+  margin:0 8px;
+  border:1px solid rgba(255,255,255,0.25);
+  border-radius:6px;
+  background:rgba(255,255,255,0.05);
+  display:inline-block;
 }
 
-.header-pill .logo {
-  width: calc(var(--bar-h) * 0.45);
-  height: auto;
-  margin-right: 10px;
+/* Score flash (kept for future use) */
+.score-flash{ animation:flash 0.6s ease-out; }
+@keyframes flash{ 0%{color:#fff}50%{color:#ff0}100%{color:#fff} }
+
+/* Super Bowl Theme B (applies only when SUPER BOWL header exists) */
+.superbowl-bar{
+  border-top:3px solid transparent;
+  background: linear-gradient(to right,#0f0f10,#0f0f10),
+              linear-gradient(90deg,#d4af37,#f7e27c,#d4af37);
+  background-origin:border-box;
+  background-clip:padding-box,border-box;
+  box-shadow:0 0 12px rgba(212,175,55,0.6);
+}
+.superbowl-header{
+  background:linear-gradient(90deg,#3a3a3a,#4a4a4a,#3a3a3a);
+  color:#f7e27c;
+  box-shadow:0 0 10px rgba(212,175,55,0.8);
+  animation:sbPulse 2.4s ease-in-out infinite;
+  border:1px solid rgba(212,175,55,0.6);
+}
+.superbowl-header .logo{ width:calc(var(--bar-h) * 0.60); }
+@keyframes sbPulse{
+  0%{box-shadow:0 0 6px rgba(212,175,55,0.4)}
+  50%{box-shadow:0 0 14px rgba(212,175,55,0.9)}
+  100%{box-shadow:0 0 6px rgba(212,175,55,0.4)}
 }
 
-/* Team logos */
-.team-logo {
-  height: calc(var(--bar-h) * 0.55);
-  width: auto;
-  margin: 0 8px;
-  border: 1px solid rgba(255,255,255,0.25);
-  border-radius: 6px;
-  background: rgba(255,255,255,0.05);
-}
-
-/* Score flash */
-.score-flash {
-  animation: flash 0.6s ease-out;
-}
-@keyframes flash {
-  0% { color: #fff; }
-  50% { color: #ff0; }
-  100% { color: #fff; }
-}
-
-/* ---------------------------------------------------------
-   SUPER BOWL THEME B (Bold)
---------------------------------------------------------- */
-
-/* Gold gradient bar only when SUPER BOWL is active */
-.superbowl-bar {
-  border-top: 3px solid transparent;
-  background: linear-gradient(to right, #111, #111),
-              linear-gradient(90deg, #d4af37, #f7e27c, #d4af37);
-  background-origin: border-box;
-  background-clip: padding-box, border-box;
-  box-shadow: 0 0 12px rgba(212,175,55,0.6);
-}
-
-/* Super Bowl header pill */
-.superbowl-header {
-  background: linear-gradient(90deg, #3a3a3a, #4a4a4a, #3a3a3a);
-  color: #f7e27c;
-  box-shadow: 0 0 10px rgba(212,175,55,0.8);
-  animation: sbPulse 2.4s ease-in-out infinite;
-  border: 1px solid rgba(212,175,55,0.6);
-}
-
-.superbowl-header .logo {
-  width: calc(var(--bar-h) * 0.60);
-}
-
-/* Pulse animation */
-@keyframes sbPulse {
-  0% { box-shadow: 0 0 6px rgba(212,175,55,0.4); }
-  50% { box-shadow: 0 0 14px rgba(212,175,55,0.9); }
-  100% { box-shadow: 0 0 6px rgba(212,175,55,0.4); }
+/* Small responsive tweak */
+@media (max-width:520px){
+  :root{ --font:18px; --bar-h:44px; --pill-pad:8px 12px; --sep:14px; }
+  .team-logo, .pill img.logo{ height:calc(var(--bar-h) * 0.55); }
 }
 </style>
 </head>
-
 <body>
 
 <div class="ticker-wrapper">
-  <div class="ticker-bar">
-    <div class="rail-viewport">
-      <div id="rail"></div>
+  <div class="ticker-bar" id="tickerBar">
+    <div class="rail-viewport" id="viewport">
+      <div id="rail" aria-hidden="false"></div>
+      <div id="rail-dup" aria-hidden="true"></div>
       <div id="rail-staging" style="display:none;"></div>
     </div>
   </div>
 </div>
 
 <script>
-/* ---------------------------------------------------------
+/* -------------------------
    CONFIG
---------------------------------------------------------- */
-
+   ------------------------- */
 const LEAGUES = [
   { name:"NFL", key:"nfl", url:"https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard" },
   { name:"NBA", key:"nba", url:"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard" },
@@ -180,134 +164,123 @@ const LEAGUE_LOGOS = {
 };
 
 const TARGET_LOOP_SECONDS = 36;
-const MIN_SPEED = 40;
-const MAX_SPEED = 120;
+const MIN_SPEED = 40;   // px/sec
+const MAX_SPEED = 120;  // px/sec
 
+const CACHE_TTL = 15000; // ms
+
+/* -------------------------
+   STATE
+   ------------------------- */
 let CACHE = null;
 let CACHE_TS = 0;
-const CACHE_TTL = 15000;
+
+let rail = null;
+let railDup = null;
+let railStaging = null;
+let tickerBar = null;
+let viewport = null;
+
+let x = 0;                 // current translateX for primary rail
+let lastTs = null;
+let smoothedFps = 60;
+let lastFpsTs = performance.now();
 
 let pillWidthCache = new WeakMap();
 let viewportRectCache = null;
 
-let rail = null;
-let railStaging = null;
-
-/* ---------------------------------------------------------
+/* -------------------------
    HELPERS
---------------------------------------------------------- */
-
-function safe(obj, path, fallback="") {
-  try {
-    return path.split(".").reduce((o,k)=>o[k], obj) ?? fallback;
-  } catch {
-    return fallback;
-  }
+   ------------------------- */
+function safe(obj, path, fallback=""){
+  try{ return path.split('.').reduce((o,k)=>o[k], obj) ?? fallback; } catch { return fallback; }
 }
-
-function pstTimestamp(iso){
-  return new Date(iso).getTime();
-}
-
+function pstTimestamp(iso){ return new Date(iso).getTime(); }
 function formatPST(iso){
   const d = new Date(iso);
-  return d.toLocaleTimeString("en-US", { hour:"numeric", minute:"2-digit", timeZone:"America/Los_Angeles" });
+  return d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZone:'America/Los_Angeles'});
 }
-
 function normalizeRound(raw){
-  const t = (raw || "").toUpperCase();
-  if(t.includes("WILD")) return "WILD CARD";
-  if(t.includes("DIVISION")) return "DIVISIONAL";
-  if(t.includes("CHAMP") && !t.includes("SUPER")) return "CONF CHAMPIONSHIP";
-  if(t.includes("SUPER")) return "SUPER BOWL";
-  return "Regular";
+  const t = (raw||'').toUpperCase();
+  if(t.includes('WILD')) return 'WILD CARD';
+  if(t.includes('DIVISION')) return 'DIVISIONAL';
+  if(t.includes('CHAMP') && !t.includes('SUPER')) return 'CONF CHAMPIONSHIP';
+  if(t.includes('SUPER')) return 'SUPER BOWL';
+  return 'Regular';
 }
-
 function gameState(item){
   if(item.isLive) return 1;
-  if(item.statusText.toUpperCase().includes("FINAL")) return 2;
+  if((item.statusText||'').toUpperCase().includes('FINAL')) return 2;
   return 0;
 }
+function gameSort(a,b){ return pstTimestamp(a.iso) - pstTimestamp(b.iso); }
 
-function gameSort(a,b){
-  return pstTimestamp(a.iso) - pstTimestamp(b.iso);
-}
-
-/* ---------------------------------------------------------
-   PROXY FETCH
---------------------------------------------------------- */
-
+/* -------------------------
+   FETCH (proxy)
+   ------------------------- */
 async function fetchJson(url){
   const proxy = "https://corsproxy.io/?";
-  try {
-    const r = await fetch(proxy + encodeURIComponent(url), { cache:"no-store" });
+  try{
+    const r = await fetch(proxy + encodeURIComponent(url), { cache: "no-store" });
     if(r.ok) return r.json();
-  } catch(e){
-    console.error("Proxy fetch error:", e);
+  }catch(e){
+    console.error('fetchJson error', e);
   }
   return null;
 }
 
-/* ---------------------------------------------------------
-   UNIFIED fetchScores()
---------------------------------------------------------- */
-
+/* -------------------------
+   UNIFIED SCORE FETCH
+   ------------------------- */
 async function fetchScores(){
   const now = Date.now();
-  if (CACHE && (now - CACHE_TS) < CACHE_TTL) return CACHE;
+  if(CACHE && (now - CACHE_TS) < CACHE_TTL) return CACHE;
 
   const allItems = [];
 
-  for (const lg of LEAGUES) {
+  for(const lg of LEAGUES){
     const leagueKey = lg.key.toLowerCase();
     const playoffGroups = {};
     const regulars = [];
 
-    try {
+    try{
       const data = await fetchJson(lg.url);
-      if (!data) continue;
-
+      if(!data) continue;
       const events = (data.events || []).slice();
 
-      for (const ev of events) {
+      for(const ev of events){
+        const seasonType = safe(ev, 'season.type', 0);
+        if(seasonType !== 2 && seasonType !== 3) continue;
 
-        const seasonType = safe(ev, "season.type", 0);
-        if (seasonType !== 2 && seasonType !== 3) continue;
+        const comp = safe(ev, 'competitions.0', null);
+        if(!comp) continue;
 
-        const comp = safe(ev, "competitions.0", null);
-        if (!comp) continue;
+        const away = (comp.competitors || []).find(t=>t.homeAway==='away');
+        const home = (comp.competitors || []).find(t=>t.homeAway==='home');
+        if(!away || !home) continue;
 
-        const away = (comp.competitors || []).find(t => t.homeAway === "away");
-        const home = (comp.competitors || []).find(t => t.homeAway === "home");
-        if (!away || !home) continue;
-
-        const iso = ev.date || comp.date || "";
-        if (!iso) continue;
+        const iso = ev.date || comp.date || '';
+        if(!iso) continue;
 
         const ts = pstTimestamp(iso);
         const daysOut = (ts - Date.now()) / 86400000;
-        if (daysOut > 30) continue;
+        if(daysOut > 30) continue;
 
         const kickoff = formatPST(iso);
+        const status = safe(comp, 'status.type', {});
+        const state = safe(status, 'state', '');
+        const isLive = state === 'in';
+        const statusText = isLive ? 'LIVE' : (safe(status,'shortDetail','') || safe(status,'type.text','') || '');
 
-        const status = safe(comp, "status.type", {});
-        const state = safe(status, "state", "");
-        const isLive = state === "in";
-        const statusText = isLive
-          ? "LIVE"
-          : (safe(status, "shortDetail", "") ||
-             safe(status, "type.text", "") ||
-             "");
-
-        const awayLogo = safe(away, "team.logo", safe(away, "team.logos.0.href", ""));
-        const homeLogo = safe(home, "team.logo", safe(home, "team.logos.0.href", ""));
-        const awayAbbr = (safe(away, "team.abbreviation", safe(away, "team.displayName", "")) || "").toUpperCase();
-        const homeAbbr = (safe(home, "team.abbreviation", safe(home, "team.displayName", "")) || "").toUpperCase();
-        const awayScore = safe(away, "score", "");
-        const homeScore = safe(home, "score", "");
+        const awayLogo = safe(away, 'team.logo', safe(away,'team.logos.0.href',''));
+        const homeLogo = safe(home, 'team.logo', safe(home,'team.logos.0.href',''));
+        const awayAbbr = (safe(away,'team.abbreviation', safe(away,'team.displayName','')) || '').toUpperCase();
+        const homeAbbr = (safe(home,'team.abbreviation', safe(home,'team.displayName','')) || '').toUpperCase();
+        const awayScore = safe(away,'score','');
+        const homeScore = safe(home,'score','');
 
         const isPlayoff = seasonType === 3;
-        const roundRaw = safe(comp, "notes.0.headline", safe(ev, "league.name", "Playoffs"));
+        const roundRaw = safe(comp, 'notes.0.headline', safe(ev,'league.name','Playoffs'));
         const round = normalizeRound(roundRaw);
 
         const item = {
@@ -317,14 +290,14 @@ async function fetchScores(){
           round,
           iso,
           kickoff,
-          networks: [],
+          networks: [], // removed networks entirely
           away: { abbr: awayAbbr, logo: awayLogo, score: awayScore },
           home: { abbr: homeAbbr, logo: homeLogo, score: homeScore },
           isLive,
           statusText
         };
 
-        if (isPlayoff) {
+        if(isPlayoff){
           playoffGroups[round] = playoffGroups[round] || [];
           playoffGroups[round].push(item);
         } else {
@@ -333,42 +306,35 @@ async function fetchScores(){
       }
 
       const leagueItems = [];
-
       const rounds = Object.keys(playoffGroups).sort();
-      for (const r of rounds) {
+      for(const r of rounds){
         const arr = playoffGroups[r].slice().sort(gameSort);
-        if (arr.length) {
-          leagueItems.push({ type: "roundHeader", header: r, leagueKey });
+        if(arr.length){
+          leagueItems.push({ type:'roundHeader', header:r, leagueKey });
           leagueItems.push(...arr);
         }
       }
 
       const regularSorted = regulars.slice().sort(gameSort);
-      if (regularSorted.length) {
-        leagueItems.push({ type: "roundHeader", header: "Regular", leagueKey });
+      if(regularSorted.length){
+        leagueItems.push({ type:'roundHeader', header:'Regular', leagueKey });
         leagueItems.push(...regularSorted);
       }
 
       allItems.push(...leagueItems);
 
-    } catch (err) {
-      console.error("League fetch error", lg.name, err);
+    }catch(err){
+      console.error('League fetch error', lg.name, err);
     }
   }
 
+  // dedupe
   const seen = new Set();
   const dedup = [];
-
-  for (const it of allItems) {
-    if (it.type === "roundHeader") {
-      dedup.push(it);
-      continue;
-    }
+  for(const it of allItems){
+    if(it.type === 'roundHeader'){ dedup.push(it); continue; }
     const key = `${it.iso}|${it.away.abbr}|${it.home.abbr}|${it.league}`;
-    if (!seen.has(key)) {
-      seen.add(key);
-      dedup.push(it);
-    }
+    if(!seen.has(key)){ seen.add(key); dedup.push(it); }
   }
 
   CACHE = dedup;
@@ -376,64 +342,57 @@ async function fetchScores(){
   return dedup;
 }
 
-/* ---------------------------------------------------------
-   RENDERING
---------------------------------------------------------- */
-
+/* -------------------------
+   RENDERING HELPERS
+   ------------------------- */
 function createHeaderPill(text, leagueKey){
-  const pill = document.createElement("span");
-  pill.className = "pill header-pill";
+  const pill = document.createElement('span');
+  pill.className = 'pill header-pill';
 
-  const logo = document.createElement("img");
-  logo.className = "logo";
-  logo.src = LEAGUE_LOGOS[leagueKey] || "";
-  logo.alt = leagueKey.toUpperCase();
-  logo.onerror = () => logo.hidden = true;
+  const logo = document.createElement('img');
+  logo.className = 'logo';
+  logo.src = LEAGUE_LOGOS[leagueKey] || '';
+  logo.alt = leagueKey ? leagueKey.toUpperCase() : '';
+  logo.onerror = ()=>logo.hidden = true;
 
-  const label = document.createElement("span");
+  const label = document.createElement('span');
   label.textContent = text;
 
   pill.appendChild(logo);
   pill.appendChild(label);
 
-  if (text === "SUPER BOWL") {
-    pill.classList.add("superbowl-header");
-  }
+  if(text === 'SUPER BOWL') pill.classList.add('superbowl-header');
 
   return pill;
 }
 
 function createGamePill(item){
-  const pill = document.createElement("span");
-  pill.className = "pill";
+  const pill = document.createElement('span');
+  pill.className = 'pill';
 
-  const awayLogo = document.createElement("img");
-  awayLogo.className = "team-logo";
-  awayLogo.src = item.away.logo;
-  awayLogo.onerror = () => awayLogo.hidden = true;
+  const awayLogo = document.createElement('img');
+  awayLogo.className = 'team-logo';
+  awayLogo.src = item.away.logo || '';
+  awayLogo.onerror = ()=>awayLogo.hidden = true;
 
-  const homeLogo = document.createElement("img");
-  homeLogo.className = "team-logo";
-  homeLogo.src = item.home.logo;
-  homeLogo.onerror = () => homeLogo.hidden = true;
+  const homeLogo = document.createElement('img');
+  homeLogo.className = 'team-logo';
+  homeLogo.src = item.home.logo || '';
+  homeLogo.onerror = ()=>homeLogo.hidden = true;
 
-  const away = document.createElement("span");
+  const away = document.createElement('span');
   away.textContent = item.away.abbr;
 
-  const home = document.createElement("span");
+  const home = document.createElement('span');
   home.textContent = item.home.abbr;
 
-  const score = document.createElement("span");
-  score.style.margin = "0 10px";
+  const score = document.createElement('span');
+  score.style.margin = '0 10px';
 
   const state = gameState(item);
-  if (state === 0) {
-    score.textContent = item.kickoff;
-  } else if (state === 1) {
-    score.textContent = `${item.away.score} - ${item.home.score} LIVE`;
-  } else {
-    score.textContent = `${item.away.score} - ${item.home.score} FINAL`;
-  }
+  if(state === 0) score.textContent = item.kickoff;
+  else if(state === 1) score.textContent = `${item.away.score} - ${item.home.score} LIVE`;
+  else score.textContent = `${item.away.score} - ${item.home.score} FINAL`;
 
   pill.appendChild(awayLogo);
   pill.appendChild(away);
@@ -444,142 +403,155 @@ function createGamePill(item){
   return pill;
 }
 
-/* ---------------------------------------------------------
-   BUILD RAILS
---------------------------------------------------------- */
-
-function buildRailInto(container, items){
-  container.innerHTML = "";
+/* -------------------------
+   BUILD DOUBLE RAILS
+   ------------------------- */
+function buildDoubleRail(items){
+  // primary rail and duplicate rail will contain identical sequences
+  rail.innerHTML = '';
+  railDup.innerHTML = '';
 
   let isSuperBowl = false;
 
-  for (const it of items) {
-    if (it.type === "roundHeader") {
-      if (it.header === "SUPER BOWL") {
-        isSuperBowl = true;
-      }
-      container.appendChild(createHeaderPill(it.header, it.leagueKey));
-    } else {
-      container.appendChild(createGamePill(it));
-    }
+  for(const it of items){
+    const node = (it.type === 'roundHeader') ? createHeaderPill(it.header, it.leagueKey) : createGamePill(it);
+    if(it.type === 'roundHeader' && it.header === 'SUPER BOWL') isSuperBowl = true;
+
+    // append clones to both rails
+    rail.appendChild(node.cloneNode(true));
+    railDup.appendChild(node.cloneNode(true));
   }
+
+  // position rails: rail at x, railDup immediately after rail
+  rail.style.transform = `translateX(${x}px)`;
+  const primaryWidth = rail.scrollWidth || 1;
+  railDup.style.transform = `translateX(${x + primaryWidth}px)`;
 
   return isSuperBowl;
 }
 
+/* staging builder (single sequence) */
+function buildStagingSequence(items){
+  railStaging.innerHTML = '';
+  let isSuperBowl = false;
+  for(const it of items){
+    const node = (it.type === 'roundHeader') ? createHeaderPill(it.header, it.leagueKey) : createGamePill(it);
+    if(it.type === 'roundHeader' && it.header === 'SUPER BOWL') isSuperBowl = true;
+    railStaging.appendChild(node);
+  }
+  return isSuperBowl;
+}
+
+/* -------------------------
+   THEME APPLY
+   ------------------------- */
 function applySuperBowlTheme(isSuperBowl){
-  const bar = document.querySelector(".ticker-bar");
-  bar.classList.toggle("superbowl-bar", isSuperBowl);
+  tickerBar.classList.toggle('superbowl-bar', !!isSuperBowl);
 }
 
-/* ---------------------------------------------------------
-   LOOP ENGINE
---------------------------------------------------------- */
-
-let x = 0;
-let lastTs = null;
-let smoothedFps = 60;
-let lastFpsTs = performance.now();
-
+/* -------------------------
+   DYNAMIC SPEED
+   ------------------------- */
 function computeDynamicSpeed(){
-  return rail.scrollWidth / TARGET_LOOP_SECONDS;
+  // base on primary rail width so loop time approximates TARGET_LOOP_SECONDS
+  const primaryWidth = rail.scrollWidth || 1;
+  return primaryWidth / TARGET_LOOP_SECONDS;
 }
 
+/* -------------------------
+   LOOP (double-rail)
+   ------------------------- */
 function loopFrame(ts){
-  if (!lastTs) lastTs = ts;
+  if(!lastTs) lastTs = ts;
   const dt = (ts - lastTs) / 1000;
   lastTs = ts;
 
   const frameTime = ts - lastFpsTs;
   lastFpsTs = ts;
-  const currentFps = 1000 / frameTime;
+  const currentFps = 1000 / Math.max(frameTime,1);
   smoothedFps = smoothedFps * 0.9 + currentFps * 0.1;
 
   let dynamicSpeed = computeDynamicSpeed();
   dynamicSpeed = Math.max(MIN_SPEED, Math.min(MAX_SPEED, dynamicSpeed));
 
   x -= dynamicSpeed * dt;
-  rail.style.transform = `translateX(${x}px)`;
 
-  const viewport = document.querySelector(".rail-viewport");
-  const vpRect = viewportRectCache || viewport.getBoundingClientRect();
-  viewportRectCache = vpRect;
+  const primaryWidth = rail.scrollWidth || 1;
 
-  const first = rail.firstElementChild;
-
-  if (first) {
-    let width = pillWidthCache.get(first);
-    if (!width) {
-      width = first.getBoundingClientRect().width;
-      pillWidthCache.set(first, width);
-    }
-
-    const firstRect = first.getBoundingClientRect();
-
-    if (firstRect.right < vpRect.left) {
-      rail.appendChild(first);
-      x += width;
-      rail.style.transform = `translateX(${x}px)`;
-    }
+  // wrap: when x <= -primaryWidth, add primaryWidth to x (seamless)
+  if(Math.abs(x) >= primaryWidth){
+    x += primaryWidth;
   }
 
-  viewportRectCache = null;
+  // set transforms: rail at x, railDup at x + primaryWidth
+  rail.style.transform = `translateX(${x}px)`;
+  railDup.style.transform = `translateX(${x + primaryWidth}px)`;
 
   requestAnimationFrame(loopFrame);
 }
 
-/* ---------------------------------------------------------
-   REFRESH WITHOUT HICCUP (STAGING + SWAP)
---------------------------------------------------------- */
-
+/* -------------------------
+   REFRESH (staging + atomic swap)
+   ------------------------- */
 async function refreshData(){
   const items = await fetchScores();
-  if (!items || !items.length) return;
+  if(!items || !items.length) return;
 
-  const isSuperBowl = buildRailInto(railStaging, items);
+  // build staging single sequence (not duplicated)
+  const isSuperBowl = buildStagingSequence(items);
 
-  requestAnimationFrame(() => {
-    const oldRail = rail;
-    const oldWidth = oldRail.scrollWidth || 1;
+  // swap in between frames to avoid layout thrash
+  requestAnimationFrame(()=>{
+    const oldPrimaryWidth = rail.scrollWidth || 1;
     const oldX = x;
 
-    rail = railStaging;
-    railStaging = oldRail;
+    // copy staging into both rails (duplicate)
+    rail.innerHTML = railStaging.innerHTML;
+    railDup.innerHTML = railStaging.innerHTML;
 
-    railStaging.style.display = "none";
-    rail.style.display = "inline-flex";
-
+    // reset caches
     pillWidthCache = new WeakMap();
     viewportRectCache = null;
 
-    const newWidth = rail.scrollWidth || 1;
-    const ratio = newWidth / oldWidth;
+    // recalc widths and adjust x proportionally to avoid jumps
+    const newPrimaryWidth = rail.scrollWidth || 1;
+    const ratio = newPrimaryWidth / oldPrimaryWidth;
     x = oldX * ratio;
+
+    // ensure transforms are set correctly
     rail.style.transform = `translateX(${x}px)`;
+    railDup.style.transform = `translateX(${x + newPrimaryWidth}px)`;
 
     applySuperBowlTheme(isSuperBowl);
   });
 }
 
-/* ---------------------------------------------------------
+/* -------------------------
    BOOTSTRAP
---------------------------------------------------------- */
-
+   ------------------------- */
 async function bootstrapTicker(){
-  rail = document.getElementById("rail");
-  railStaging = document.getElementById("rail-staging");
+  rail = document.getElementById('rail');
+  railDup = document.getElementById('rail-dup');
+  railStaging = document.getElementById('rail-staging');
+  tickerBar = document.getElementById('tickerBar');
+  viewport = document.getElementById('viewport');
 
   const items = await fetchScores();
-  if (!items || !items.length) return;
+  if(!items || !items.length) return;
 
-  const isSuperBowl = buildRailInto(rail, items);
+  const isSuperBowl = buildDoubleRail(items);
   applySuperBowlTheme(isSuperBowl);
 
+  // start loop
   requestAnimationFrame(loopFrame);
 
+  // periodic refresh (staging + atomic swap)
   setInterval(refreshData, 15000);
 }
 
+/* -------------------------
+   START
+   ------------------------- */
 bootstrapTicker();
 </script>
 
