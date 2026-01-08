@@ -41,7 +41,7 @@ body {
   align-items: center;
   white-space: nowrap;
   border-top: 3px solid #c00; /* default ESPN red stripe */
-  transition: border-top 0.3s ease;
+  transition: border-top 0.3s ease, box-shadow 0.3s ease, background 0.3s ease;
 }
 
 .rail-viewport {
@@ -50,7 +50,8 @@ body {
   height: var(--bar-h);
 }
 
-#rail {
+#rail,
+#rail-staging {
   display: inline-flex;
   align-items: center;
   height: var(--bar-h);
@@ -149,6 +150,7 @@ body {
   <div class="ticker-bar">
     <div class="rail-viewport">
       <div id="rail"></div>
+      <div id="rail-staging" style="display:none;"></div>
     </div>
   </div>
 </div>
@@ -180,8 +182,11 @@ let CACHE = null;
 let CACHE_TS = 0;
 const CACHE_TTL = 15000;
 
-const pillWidthCache = new WeakMap();
+let pillWidthCache = new WeakMap();
 let viewportRectCache = null;
+
+let rail = null;
+let railStaging = null;
 
 /* ---------------------------------------------------------
    HELPERS
@@ -435,11 +440,11 @@ function createGamePill(item){
 }
 
 /* ---------------------------------------------------------
-   BUILD INITIAL RAIL
+   BUILD RAILS
 --------------------------------------------------------- */
 
-function buildInitialRail(items){
-  rail.innerHTML = "";
+function buildRailInto(container, items){
+  container.innerHTML = "";
 
   let isSuperBowl = false;
 
@@ -448,12 +453,16 @@ function buildInitialRail(items){
       if (it.header === "SUPER BOWL") {
         isSuperBowl = true;
       }
-      rail.appendChild(createHeaderPill(it.header, it.leagueKey));
+      container.appendChild(createHeaderPill(it.header, it.leagueKey));
     } else {
-      rail.appendChild(createGamePill(it));
+      container.appendChild(createGamePill(it));
     }
   }
 
+  return isSuperBowl;
+}
+
+function applySuperBowlTheme(isSuperBowl){
   const bar = document.querySelector(".ticker-bar");
   bar.classList.toggle("superbowl-bar", isSuperBowl);
 }
@@ -515,17 +524,61 @@ function loopFrame(ts){
 }
 
 /* ---------------------------------------------------------
+   REFRESH WITHOUT HICCUP (STAGING + SWAP)
+--------------------------------------------------------- */
+
+async function refreshData(){
+  const items = await fetchScores();
+  if (!items || !items.length) return;
+
+  // Build into staging rail off-screen
+  const isSuperBowl = buildRailInto(railStaging, items);
+
+  // Atomic swap between frames
+  requestAnimationFrame(() => {
+    // Preserve current offset relative to new content
+    const oldRail = rail;
+    const oldWidth = oldRail.scrollWidth || 1;
+    const oldX = x;
+
+    rail = railStaging;
+    railStaging = oldRail;
+
+    // Put staging off-screen again
+    railStaging.style.display = "none";
+    rail.style.display = "inline-flex";
+
+    // Reset caches for new nodes
+    pillWidthCache = new WeakMap();
+    viewportRectCache = null;
+
+    // Adjust x proportionally to new width to avoid jumps
+    const newWidth = rail.scrollWidth || 1;
+    const ratio = newWidth / oldWidth;
+    x = oldX * ratio;
+    rail.style.transform = `translateX(${x}px)`;
+
+    applySuperBowlTheme(isSuperBowl);
+  });
+}
+
+/* ---------------------------------------------------------
    BOOTSTRAP
 --------------------------------------------------------- */
 
 async function bootstrapTicker(){
+  rail = document.getElementById("rail");
+  railStaging = document.getElementById("rail-staging");
+
   const items = await fetchScores();
-  buildInitialRail(items);
+  if (!items || !items.length) return;
+
+  const isSuperBowl = buildRailInto(rail, items);
+  applySuperBowlTheme(isSuperBowl);
+
   requestAnimationFrame(loopFrame);
 
-  setInterval(async ()=>{
-    const updated = await fetchScores();
-  }, 15000);
+  setInterval(refreshData, 15000);
 }
 
 bootstrapTicker();
