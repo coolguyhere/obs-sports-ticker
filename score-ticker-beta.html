@@ -24,6 +24,15 @@ body {
   font-family: Arial, sans-serif;
 }
 
+/* Bottom-pinned ticker */
+.ticker-wrapper {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 9999;
+}
+
 .ticker-bar {
   height: var(--bar-h);
   background: var(--bg);
@@ -31,7 +40,8 @@ body {
   display: flex;
   align-items: center;
   white-space: nowrap;
-  border-top: 3px solid #c00; /* ESPN red stripe */
+  border-top: 3px solid #c00; /* default ESPN red stripe */
+  transition: border-top 0.3s ease;
 }
 
 .rail-viewport {
@@ -96,14 +106,50 @@ body {
   50% { color: #ff0; }
   100% { color: #fff; }
 }
+
+/* ---------------------------------------------------------
+   SUPER BOWL THEME B (Bold)
+--------------------------------------------------------- */
+
+/* Gold gradient bar only when SUPER BOWL is active */
+.superbowl-bar {
+  border-top: 3px solid transparent;
+  background: linear-gradient(to right, #111, #111),
+              linear-gradient(90deg, #d4af37, #f7e27c, #d4af37);
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  box-shadow: 0 0 12px rgba(212,175,55,0.6);
+}
+
+/* Super Bowl header pill */
+.superbowl-header {
+  background: linear-gradient(90deg, #3a3a3a, #4a4a4a, #3a3a3a);
+  color: #f7e27c;
+  box-shadow: 0 0 10px rgba(212,175,55,0.8);
+  animation: sbPulse 2.4s ease-in-out infinite;
+  border: 1px solid rgba(212,175,55,0.6);
+}
+
+.superbowl-header .logo {
+  width: calc(var(--bar-h) * 0.60);
+}
+
+/* Pulse animation */
+@keyframes sbPulse {
+  0% { box-shadow: 0 0 6px rgba(212,175,55,0.4); }
+  50% { box-shadow: 0 0 14px rgba(212,175,55,0.9); }
+  100% { box-shadow: 0 0 6px rgba(212,175,55,0.4); }
+}
 </style>
 </head>
 
 <body>
 
-<div class="ticker-bar">
-  <div class="rail-viewport">
-    <div id="rail"></div>
+<div class="ticker-wrapper">
+  <div class="ticker-bar">
+    <div class="rail-viewport">
+      <div id="rail"></div>
+    </div>
   </div>
 </div>
 
@@ -135,6 +181,7 @@ let CACHE_TS = 0;
 const CACHE_TTL = 15000;
 
 const pillWidthCache = new WeakMap();
+let viewportRectCache = null;
 
 /* ---------------------------------------------------------
    HELPERS
@@ -173,9 +220,7 @@ function gameState(item){
 }
 
 function gameSort(a,b){
-  const ta = pstTimestamp(a.iso);
-  const tb = pstTimestamp(b.iso);
-  return ta - tb;
+  return pstTimestamp(a.iso) - pstTimestamp(b.iso);
 }
 
 /* ---------------------------------------------------------
@@ -262,7 +307,7 @@ async function fetchScores(){
           round,
           iso,
           kickoff,
-          networks: [], // removed networks entirely
+          networks: [],
           away: { abbr: awayAbbr, logo: awayLogo, score: awayScore },
           home: { abbr: homeAbbr, logo: homeLogo, score: homeScore },
           isLive,
@@ -340,6 +385,11 @@ function createHeaderPill(text, leagueKey){
 
   pill.appendChild(logo);
   pill.appendChild(label);
+
+  if (text === "SUPER BOWL") {
+    pill.classList.add("superbowl-header");
+  }
+
   return pill;
 }
 
@@ -390,13 +440,22 @@ function createGamePill(item){
 
 function buildInitialRail(items){
   rail.innerHTML = "";
+
+  let isSuperBowl = false;
+
   for (const it of items) {
     if (it.type === "roundHeader") {
+      if (it.header === "SUPER BOWL") {
+        isSuperBowl = true;
+      }
       rail.appendChild(createHeaderPill(it.header, it.leagueKey));
     } else {
       rail.appendChild(createGamePill(it));
     }
   }
+
+  const bar = document.querySelector(".ticker-bar");
+  bar.classList.toggle("superbowl-bar", isSuperBowl);
 }
 
 /* ---------------------------------------------------------
@@ -429,6 +488,9 @@ function loopFrame(ts){
   rail.style.transform = `translateX(${x}px)`;
 
   const viewport = document.querySelector(".rail-viewport");
+  const vpRect = viewportRectCache || viewport.getBoundingClientRect();
+  viewportRectCache = vpRect;
+
   const first = rail.firstElementChild;
 
   if (first) {
@@ -439,7 +501,6 @@ function loopFrame(ts){
     }
 
     const firstRect = first.getBoundingClientRect();
-    const vpRect = viewport.getBoundingClientRect();
 
     if (firstRect.right < vpRect.left) {
       rail.appendChild(first);
@@ -447,6 +508,8 @@ function loopFrame(ts){
       rail.style.transform = `translateX(${x}px)`;
     }
   }
+
+  viewportRectCache = null;
 
   requestAnimationFrame(loopFrame);
 }
@@ -462,7 +525,6 @@ async function bootstrapTicker(){
 
   setInterval(async ()=>{
     const updated = await fetchScores();
-    // No rebuild needed — continuous loop handles updates
   }, 15000);
 }
 
