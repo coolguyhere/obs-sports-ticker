@@ -1,179 +1,124 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html>
 <head>
-<meta charset="utf-8" />
-<title>ESPN-style Live Ticker (Updated)</title>
-<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta charset="UTF-8" />
+<title>Sports Ticker</title>
 
 <style>
-  :root{
-  --bar-h: clamp(50px, 8vh, 72px);
-  --logo-size: calc(var(--bar-h) * 0.6);
-  --espn-red: #e31837;
-  --pill-bg: rgba(255,255,255,0.08);
-  --pill-border: rgba(255,255,255,0.22);
+:root {
+  --bar-h: 48px;
+  --bg: #111;
+  --text: #fff;
+  --pill-bg: #1a1a1a;
+  --pill-pad: 10px 14px;
+  --sep: 18px;
+  --round-bg: #222;
+  --round-text: #fff;
+  --font: 14px;
 }
+
+/* Container */
+body {
+  margin: 0;
+  background: #000;
+  font-family: Arial, sans-serif;
+}
+
+.ticker-bar {
+  height: var(--bar-h);
+  background: var(--bg);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  border-top: 3px solid #c00; /* ESPN red stripe */
+}
+
+.rail-viewport {
+  overflow: hidden;
+  width: 100%;
+  height: var(--bar-h);
+}
+
+#rail {
+  display: inline-flex;
+  align-items: center;
+  height: var(--bar-h);
+  will-change: transform;
+}
+
+/* Pills */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  background: var(--pill-bg);
+  color: var(--text);
+  padding: var(--pill-pad);
+  margin-right: var(--sep);
+  border-radius: 4px;
+  font-size: var(--font);
+  height: calc(var(--bar-h) - 12px);
+}
+
+.pill img.logo {
+  height: calc(var(--bar-h) * 0.55);
+  width: auto;
+  margin-right: 8px;
+}
+
+/* Header pills */
+.header-pill {
+  background: var(--round-bg);
+  color: var(--round-text);
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
 .header-pill .logo {
   width: calc(var(--bar-h) * 0.45);
   height: auto;
   margin-right: 8px;
 }
 
-html,body{
-  height:100%; margin:0; padding:0; background:transparent; overflow:hidden;
-  font-family: "Roboto Condensed","Arial Narrow",Arial,Helvetica,sans-serif;
-  -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+/* Team logos */
+.team-logo {
+  height: calc(var(--bar-h) * 0.55);
+  width: auto;
+  margin: 0 6px;
 }
 
-.ticker-wrap{
-  position:fixed; left:0; right:0; bottom:0;
-  height:var(--bar-h);
-  display:flex; align-items:center;
-  padding:6px 12px; box-sizing:border-box;
-  background: linear-gradient(to bottom, rgba(12,12,12,0.95), rgba(4,4,4,0.95));
-  border-top:1px solid rgba(255,255,255,0.04);
-  overflow:hidden;
+/* Score flash */
+.score-flash {
+  animation: flash 0.6s ease-out;
 }
-
-.ticker-wrap::before{
-  content:""; position:absolute; left:0; right:0; top:0; height:3px;
-  background: linear-gradient(90deg, var(--espn-red), color-mix(in srgb, var(--espn-red), black 6%));
-  z-index:10;
+@keyframes flash {
+  0% { color: #fff; }
+  50% { color: #ff0; }
+  100% { color: #fff; }
 }
-
-.rail-viewport{
-  width:100%;
-  overflow:hidden;
-}
-
-.rail{
-  display:inline-flex;
-  align-items:center;
-  gap:18px;
-  white-space:nowrap;
-  transform: translateX(0);
-  will-change: transform;
-}
-
-.pill{
-  display:inline-flex;
-  align-items:center;
-  gap:12px;
-  padding:6px 12px;
-  min-height: calc(var(--bar-h) - 14px);
-  background: var(--pill-bg);
-  border-left: 3px solid var(--pill-border);
-  border-radius:3px;
-  color:#fff;
-  font-weight:700;
-  box-sizing:border-box;
-  transition: box-shadow 200ms ease;
-}
-
-.pill.header-pill{
-  background: rgba(255,255,255,0.16);
-  border-left-color: var(--espn-red);
-  text-transform:none;
-  letter-spacing:0.06em;
-  font-size: calc(var(--bar-h) * 0.26); /* slightly larger */
-}
-
-.pill .team{
-  display:inline-flex; align-items:center; gap:8px;
-  text-transform:uppercase;
-  font-size: calc(var(--bar-h) * 0.28);
-}
-
-.pill img.logo{
-  width: var(--logo-size);
-  height: var(--logo-size);
-  object-fit:contain;
-  display:block;
-}
-
-.pill .score{
-  display:flex; flex-direction:column; align-items:center; justify-content:center;
-  font-variant-numeric: tabular-nums;
-  line-height:1;
-}
-
-.pill .score .main{
-  font-size: calc(var(--bar-h) * 0.28);
-  font-weight:900;
-}
-
-.pill .score .sub{
-  font-size: calc(var(--bar-h) * 0.20);
-  opacity:0.92;
-  text-transform:uppercase;
-}
-
-.pill .final{
-  margin-left:8px;
-  padding:3px 7px;
-  background: var(--espn-red);
-  color:white;
-  font-weight:900;
-  font-size: calc(var(--bar-h) * 0.16);
-  border-radius:3px;
-}
-
-.pill .networks{
-  display:inline-flex;
-  align-items:center;
-  gap:6px;
-  margin-left:10px;
-}
-
-.network-logo{
-  height: calc(var(--bar-h) * 0.32);
-  width:auto;
-  object-fit:contain;
-  display:inline-block;
-}
-
-.network-text{
-  font-size: calc(var(--bar-h) * 0.18);
-  opacity:0.9;
-  text-transform:uppercase;
-}
-
-.pill.score-flash{
-  box-shadow: 0 6px 18px rgba(0,0,0,0.45), 0 0 14px rgba(255,255,255,0.04) inset;
-  animation: scorePop 900ms ease;
-}
-
-@keyframes scorePop{
-  0%{ transform:scale(1.02); background:rgba(255,255,255,0.14); }
-  40%{ transform:scale(1.00); background:var(--pill-bg); }
-  100%{ transform:scale(1); background:var(--pill-bg); }
-}
-
-img.logo[hidden]{ display:none; }
-
-.pill.league-nfl{ background-color: rgba(1,51,105,0.20); }
-.pill.league-nba{ background-color: rgba(23,64,139,0.20); }
-.pill.league-mlb{ background-color: rgba(0,45,114,0.20); }
-.pill.league-nhl{ background-color: rgba(17,17,17,0.20); }
-
-@media (prefers-reduced-motion: reduce){
-  .rail{ transition:none !important; animation:none !important; }
-}
-
 </style>
 </head>
-<body>
-  <div class="ticker-wrap" id="tickerWrap" aria-live="polite">
-    <div class="rail-viewport">
-      <div class="rail" id="rail"></div>
-    </div>
-  </div>
 
+<body>
+
+<div class="ticker-bar">
+  <div class="rail-viewport">
+    <div id="rail"></div>
+  </div>
+</div>
 
 <script>
-let smoothedFps = 60;
-let lastFpsTs = performance.now();
-const pillWidthCache = new WeakMap();
+/* ---------------------------------------------------------
+   CONFIG
+--------------------------------------------------------- */
+
+const LEAGUES = [
+  { name:"NFL", key:"nfl", url:"https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard" },
+  { name:"NBA", key:"nba", url:"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard" },
+  { name:"MLB", key:"mlb", url:"https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard" },
+  { name:"NHL", key:"nhl", url:"https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard" }
+];
+
 const LEAGUE_LOGOS = {
   nfl: "https://a.espncdn.com/i/teamlogos/leagues/500/nfl.png",
   nba: "https://a.espncdn.com/i/teamlogos/leagues/500/nba.png",
@@ -181,172 +126,133 @@ const LEAGUE_LOGOS = {
   nhl: "https://a.espncdn.com/i/teamlogos/leagues/500/nhl.png"
 };
 
-const LEAGUES = [
-  { name: "NFL", key: "nfl", url: "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard" },
-  { name: "NBA", key: "nba", url: "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard" },
-  { name: "MLB", key: "mlb", url: "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard" },
-  { name: "NHL", key: "nhl", url: "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard" }
-];
+const TARGET_LOOP_SECONDS = 36;
+const MIN_SPEED = 40;
+const MAX_SPEED = 120;
 
-const REFRESH_MS = 45_000;
-const CACHE_TTL = 30_000;
-const SPEED_PX_PER_SEC = 110; // fixed for continuous loop
+let CACHE = null;
+let CACHE_TS = 0;
+const CACHE_TTL = 15000;
 
-function proxyUrl(url){
-  return "https://api.allorigins.win/raw?url=" + encodeURIComponent(url);
-}
+const pillWidthCache = new WeakMap();
 
-const NETWORK_LOGOS = {
-  "ESPN": proxyUrl("https://upload.wikimedia.org/wikipedia/commons/2/2f/ESPN_wordmark.svg"),
-  "ESPN2": proxyUrl("https://upload.wikimedia.org/wikipedia/commons/2/2e/ESPN2_wordmark.svg"),
-  "ABC": proxyUrl("https://upload.wikimedia.org/wikipedia/commons/2/2e/ABC_2021.svg"),
-  "FOX": proxyUrl("https://upload.wikimedia.org/wikipedia/commons/6/67/FOX_wordmark.svg"),
-  "FS1": proxyUrl("https://upload.wikimedia.org/wikipedia/commons/2/2f/Fox_Sports_1_logo.svg"),
-  "NBC": proxyUrl("https://upload.wikimedia.org/wikipedia/commons/3/3f/NBC_logo_2022.svg"),
-  "CBS": proxyUrl("https://upload.wikimedia.org/wikipedia/commons/4/4f/CBS_logo.svg"),
-  "NFL Network": proxyUrl("https://upload.wikimedia.org/wikipedia/commons/4/4a/NFL_Network_logo.svg"),
-  "NFLN": proxyUrl("https://upload.wikimedia.org/wikipedia/commons/4/4a/NFL_Network_logo.svg"),
-  "Prime Video": proxyUrl("https://upload.wikimedia.org/wikipedia/commons/f/f1/Amazon_Prime_Video_logo.svg"),
-  "Peacock": proxyUrl("https://upload.wikimedia.org/wikipedia/commons/5/5f/Peacock_logo.svg"),
-  "TNT": proxyUrl("https://upload.wikimedia.org/wikipedia/commons/1/1f/TNT_Logo_2016.svg"),
-  "TBS": proxyUrl("https://upload.wikimedia.org/wikipedia/commons/1/1c/TBS_logo_2020.svg"),
-  "NBA TV": proxyUrl("https://upload.wikimedia.org/wikipedia/commons/1/1f/NBA_TV.svg"),
-  "MLB Network": proxyUrl("https://upload.wikimedia.org/wikipedia/commons/3/36/MLBNetworkLogo.svg"),
-  "ESPN+": proxyUrl("https://upload.wikimedia.org/wikipedia/commons/5/5e/ESPN%2B_logo.svg"),
-  "YouTube TV": proxyUrl("https://upload.wikimedia.org/wikipedia/commons/0/09/YouTube_TV_logo.svg")
-};
+/* ---------------------------------------------------------
+   HELPERS
+--------------------------------------------------------- */
 
-function safe(o, p, f=""){
-  try{
-    return p.split(".").reduce((x,k)=>(x && x[k]!==undefined ? x[k] : undefined), o) ?? f;
-  }catch{ return f; }
-}
-
-async function fetchJson(url){
-  const proxy = "https://corsproxy.io/?";
-
-  try{
-    const r = await fetch(proxy + encodeURIComponent(url), { cache:"no-store" });
-    if(r.ok){
-      return r.json();
-    } else {
-      console.error("Proxy fetch failed:", r.status, r.statusText);
-    }
-  }catch(e){
-    console.error("Proxy fetch error:", e);
+function safe(obj, path, fallback="") {
+  try {
+    return path.split(".").reduce((o,k)=>o[k], obj) ?? fallback;
+  } catch {
+    return fallback;
   }
-
-  return null;
 }
-
 
 function pstTimestamp(iso){
-  try{
-    if(!iso) return 0;
-    const d = new Date(iso);
-    const local = new Date(d.toLocaleString("en-US",{ timeZone:"America/Los_Angeles" }));
-    return local.getTime();
-  }catch{ return 0; }
+  return new Date(iso).getTime();
 }
 
 function formatPST(iso){
-  try{
-    if(!iso) return "";
-    const d = new Date(iso);
-    const local = new Date(d.toLocaleString("en-US",{ timeZone:"America/Los_Angeles" }));
-    const base = local.toLocaleString("en-US",{
-      month:"numeric",
-      day:"numeric",
-      hour:"numeric",
-      minute:"2-digit",
-      hour12:true
-    }).replace(",", "");
-    return base + " PST";
-  }catch{ return ""; }
+  const d = new Date(iso);
+  return d.toLocaleTimeString("en-US", { hour:"numeric", minute:"2-digit", timeZone:"America/Los_Angeles" });
+}
+
+function normalizeRound(raw){
+  const t = (raw || "").toUpperCase();
+  if(t.includes("WILD")) return "WILD CARD";
+  if(t.includes("DIVISION")) return "DIVISIONAL";
+  if(t.includes("CHAMP") && !t.includes("SUPER")) return "CONF CHAMPIONSHIP";
+  if(t.includes("SUPER")) return "SUPER BOWL";
+  return "Regular";
 }
 
 function gameState(item){
-  const st = (item.statusText || "").toUpperCase();
   if(item.isLive) return 1;
-  if(st.includes("FINAL")) return 2;
+  if(item.statusText.toUpperCase().includes("FINAL")) return 2;
   return 0;
 }
 
 function gameSort(a,b){
-  const aState = gameState(a);
-  const bState = gameState(b);
-  if(aState !== bState) return aState - bState;
-  return pstTimestamp(a.iso) - pstTimestamp(b.iso);
+  const ta = pstTimestamp(a.iso);
+  const tb = pstTimestamp(b.iso);
+  return ta - tb;
 }
 
-let CACHE = null, CACHE_TS = 0;
+/* ---------------------------------------------------------
+   PROXY FETCH
+--------------------------------------------------------- */
+
+async function fetchJson(url){
+  const proxy = "https://corsproxy.io/?";
+  try {
+    const r = await fetch(proxy + encodeURIComponent(url), { cache:"no-store" });
+    if(r.ok) return r.json();
+  } catch(e){
+    console.error("Proxy fetch error:", e);
+  }
+  return null;
+}
+
+/* ---------------------------------------------------------
+   UNIFIED fetchScores()
+--------------------------------------------------------- */
 
 async function fetchScores(){
   const now = Date.now();
-  if(CACHE && (now - CACHE_TS) < CACHE_TTL) return CACHE;
+  if (CACHE && (now - CACHE_TS) < CACHE_TTL) return CACHE;
 
   const allItems = [];
 
-  for(const lg of LEAGUES){
+  for (const lg of LEAGUES) {
     const leagueKey = lg.key.toLowerCase();
     const playoffGroups = {};
     const regulars = [];
 
-    try{
+    try {
       const data = await fetchJson(lg.url);
-      if(!data) continue;
+      if (!data) continue;
 
       const events = (data.events || []).slice();
-      for(const ev of events){
-        const seasonType = safe(ev,"season.type",0);
-        if(seasonType === 1) continue; // skip preseason
 
-        const comp = safe(ev,"competitions.0",null);
-        if(!comp) continue;
-        const away = (comp.competitors || []).find(t=>t.homeAway==="away");
-        const home = (comp.competitors || []).find(t=>t.homeAway==="home");
-        if(!away || !home) continue;
+      for (const ev of events) {
+
+        const seasonType = safe(ev, "season.type", 0);
+        if (seasonType !== 2 && seasonType !== 3) continue;
+
+        const comp = safe(ev, "competitions.0", null);
+        if (!comp) continue;
+
+        const away = (comp.competitors || []).find(t => t.homeAway === "away");
+        const home = (comp.competitors || []).find(t => t.homeAway === "home");
+        if (!away || !home) continue;
 
         const iso = ev.date || comp.date || "";
-        if(!iso) continue;
+        if (!iso) continue;
 
         const ts = pstTimestamp(iso);
         const daysOut = (ts - Date.now()) / 86400000;
-        if(daysOut > 30) continue;
+        if (daysOut > 30) continue;
 
         const kickoff = formatPST(iso);
 
-        const status = safe(comp,"status.type",{});
-        const state = safe(status,"state","");
+        const status = safe(comp, "status.type", {});
+        const state = safe(status, "state", "");
         const isLive = state === "in";
-        const statusText = isLive ? "LIVE" : (safe(status,"shortDetail","") || safe(status,"type.text","") || "");
-        const statusDetail = (safe(status,"type.detail","") || "").toUpperCase();
+        const statusText = isLive
+          ? "LIVE"
+          : (safe(status, "shortDetail", "") ||
+             safe(status, "type.text", "") ||
+             "");
 
-        const broadcasts = safe(comp,"broadcasts",[]) || safe(ev,"broadcasts",[]) || [];
-        let networkNames = [];
-        if(Array.isArray(broadcasts) && broadcasts.length){
-          const nat = broadcasts.filter(b=>b.market==="national");
-          const use = nat.length ? nat : broadcasts;
-          for(const b of use){
-            if(Array.isArray(b.names)){
-              for(const nm of b.names){
-                if(nm && !networkNames.includes(nm)) networkNames.push(nm);
-              }
-            }else if(b.name && !networkNames.includes(b.name)){
-              networkNames.push(b.name);
-            }
-          }
-        }
+        const awayLogo = safe(away, "team.logo", safe(away, "team.logos.0.href", ""));
+        const homeLogo = safe(home, "team.logo", safe(home, "team.logos.0.href", ""));
+        const awayAbbr = (safe(away, "team.abbreviation", safe(away, "team.displayName", "")) || "").toUpperCase();
+        const homeAbbr = (safe(home, "team.abbreviation", safe(home, "team.displayName", "")) || "").toUpperCase();
+        const awayScore = safe(away, "score", "");
+        const homeScore = safe(home, "score", "");
 
-        const awayLogo = safe(away,"team.logo", safe(away,"team.logos.0.href","")) || "";
-        const homeLogo = safe(home,"team.logo", safe(home,"team.logos.0.href","")) || "";
-        const awayAbbr = (safe(away,"team.abbreviation", safe(away,"team.displayName","")) || "").toUpperCase();
-        const homeAbbr = (safe(home,"team.abbreviation", safe(home,"team.displayName","")) || "").toUpperCase();
-        const awayScore = safe(away,"score","");
-        const homeScore = safe(home,"score","");
         const isPlayoff = seasonType === 3;
-        const roundRaw = safe(comp,"notes.0.headline", safe(ev,"league.name","Playoffs"));
-
+        const roundRaw = safe(comp, "notes.0.headline", safe(ev, "league.name", "Playoffs"));
         const round = normalizeRound(roundRaw);
 
         const item = {
@@ -356,26 +262,17 @@ async function fetchScores(){
           round,
           iso,
           kickoff,
-          networks: [],
-          rawNetworks: networkNames,
+          networks: [], // removed networks entirely
           away: { abbr: awayAbbr, logo: awayLogo, score: awayScore },
           home: { abbr: homeAbbr, logo: homeLogo, score: homeScore },
           isLive,
-          statusText,
-          statusDetail
+          statusText
         };
 
-        const stateCode = gameState(item);
-        if(stateCode === 0 && networkNames.length){
-          item.networks = networkNames.slice();
-        }else{
-          item.networks = [];
-        }
-
-        if(isPlayoff){
+        if (isPlayoff) {
           playoffGroups[round] = playoffGroups[round] || [];
           playoffGroups[round].push(item);
-        }else{
+        } else {
           regulars.push(item);
         }
       }
@@ -383,60 +280,54 @@ async function fetchScores(){
       const leagueItems = [];
 
       const rounds = Object.keys(playoffGroups).sort();
-      for(const r of rounds){
+      for (const r of rounds) {
         const arr = playoffGroups[r].slice().sort(gameSort);
-        if(arr.length){
-          leagueItems.push({ type:"roundHeader", header:r, leagueKey });
+        if (arr.length) {
+          leagueItems.push({ type: "roundHeader", header: r, leagueKey });
           leagueItems.push(...arr);
         }
       }
 
       const regularSorted = regulars.slice().sort(gameSort);
-      if(regularSorted.length){
-        leagueItems.push({ type:"roundHeader", header:"Regular", leagueKey });
+      if (regularSorted.length) {
+        leagueItems.push({ type: "roundHeader", header: "Regular", leagueKey });
         leagueItems.push(...regularSorted);
       }
 
       allItems.push(...leagueItems);
-    }catch(err){
+
+    } catch (err) {
       console.error("League fetch error", lg.name, err);
     }
   }
 
-  const seen = new Set(); const dedup = [];
-  for(const it of allItems){
-    if(it.type === "roundHeader"){ dedup.push(it); continue; }
+  const seen = new Set();
+  const dedup = [];
+
+  for (const it of allItems) {
+    if (it.type === "roundHeader") {
+      dedup.push(it);
+      continue;
+    }
     const key = `${it.iso}|${it.away.abbr}|${it.home.abbr}|${it.league}`;
-    if(!seen.has(key)){ seen.add(key); dedup.push(it); }
+    if (!seen.has(key)) {
+      seen.add(key);
+      dedup.push(it);
+    }
   }
 
-  CACHE = dedup; CACHE_TS = Date.now();
+  CACHE = dedup;
+  CACHE_TS = Date.now();
   return dedup;
 }
 
-function normalizeRound(raw){
-  const t = (raw || "").toUpperCase();
-  if(t.includes("WILD")) return "WILD CARD";
-  if(t.includes("DIVISION")) return "DIVISIONAL";
-  if(t.includes("CHAMP") && !t.includes("SUPER")) return "CONF CHAMPIONSHIP";
-  if(t.includes("SUPER BOWL")) return "SUPER BOWL";
-  return raw || "Playoffs";
-}
-const rail = document.getElementById("rail");
-let previousScoreMap = new Map();
-let x = 0;
-let lastTs = null;
-
-function scoreKey(item){
-  return `${item.leagueKey}|${item.away.abbr}|${item.home.abbr}|${item.iso || ""}`;
-}
+/* ---------------------------------------------------------
+   RENDERING
+--------------------------------------------------------- */
 
 function createHeaderPill(text, leagueKey){
   const pill = document.createElement("span");
   pill.className = "pill header-pill";
-  pill.dataset.type = "header";
-  pill.dataset.header = text;
-  pill.dataset.leagueKey = leagueKey;
 
   const logo = document.createElement("img");
   logo.className = "logo";
@@ -444,240 +335,112 @@ function createHeaderPill(text, leagueKey){
   logo.alt = leagueKey.toUpperCase();
   logo.onerror = () => logo.hidden = true;
 
-  pill.appendChild(logo);
-
   const label = document.createElement("span");
   label.textContent = text;
-  pill.appendChild(label);
 
+  pill.appendChild(logo);
+  pill.appendChild(label);
   return pill;
 }
-
 
 function createGamePill(item){
   const pill = document.createElement("span");
   pill.className = "pill";
-  pill.classList.add(`league-${item.leagueKey}`);
-  pill.dataset.type = "game";
-  pill.dataset.key = scoreKey(item);
 
-  const stateCode = gameState(item); // 0 future,1 live,2 final
+  const awayLogo = document.createElement("img");
+  awayLogo.className = "team-logo";
+  awayLogo.src = item.away.logo;
+  awayLogo.onerror = () => awayLogo.hidden = true;
+
+  const homeLogo = document.createElement("img");
+  homeLogo.className = "team-logo";
+  homeLogo.src = item.home.logo;
+  homeLogo.onerror = () => homeLogo.hidden = true;
 
   const away = document.createElement("span");
-  away.className = "team";
-  const aLogo = document.createElement("img");
-  aLogo.className = "logo";
-  aLogo.src = item.away.logo || "";
-  aLogo.alt = item.away.abbr || "";
-  aLogo.onerror = () => aLogo.hidden = true;
-  away.appendChild(aLogo);
-  const aText = document.createElement("span");
-  aText.textContent = item.away.abbr || "";
-  away.appendChild(aText);
-  pill.appendChild(away);
-
-  const score = document.createElement("span");
-  score.className = "score";
-  const main = document.createElement("span");
-  main.className = "main";
-  const sub = document.createElement("span");
-  sub.className = "sub";
-
-  if(stateCode === 0){
-    main.textContent = item.kickoff || "";
-    sub.textContent = "";
-  }else{
-    main.textContent = `${item.away.score || "-"} – ${item.home.score || "-"}`;
-    if(item.isLive){
-      sub.textContent = item.statusText || "LIVE";
-    }else{
-      sub.textContent = item.statusText || "";
-    }
-  }
-
-  score.appendChild(main);
-  score.appendChild(sub);
-  pill.appendChild(score);
+  away.textContent = item.away.abbr;
 
   const home = document.createElement("span");
-  home.className = "team";
-  const hText = document.createElement("span");
-  hText.textContent = item.home.abbr || "";
-  home.appendChild(hText);
-  const hLogo = document.createElement("img");
-  hLogo.className = "logo";
-  hLogo.src = item.home.logo || "";
-  hLogo.alt = item.home.abbr || "";
-  hLogo.onerror = () => hLogo.hidden = true;
-  home.appendChild(hLogo);
+  home.textContent = item.home.abbr;
+
+  const score = document.createElement("span");
+  score.style.margin = "0 8px";
+
+  const state = gameState(item);
+  if (state === 0) {
+    score.textContent = item.kickoff;
+  } else if (state === 1) {
+    score.textContent = `${item.away.score} - ${item.home.score} LIVE`;
+  } else {
+    score.textContent = `${item.away.score} - ${item.home.score} FINAL`;
+  }
+
+  pill.appendChild(awayLogo);
+  pill.appendChild(away);
+  pill.appendChild(score);
   pill.appendChild(home);
-
-  if(stateCode === 2){
-    const f = document.createElement("span");
-    f.className = "final";
-    f.textContent = "FINAL";
-    pill.appendChild(f);
-  }
-
-  if(stateCode === 0 && Array.isArray(item.networks) && item.networks.length){
-    const nets = document.createElement("span");
-    nets.className = "networks";
-    for(const name of item.networks){
-      const logoUrl = NETWORK_LOGOS[name];
-      if(logoUrl){
-        const img = document.createElement("img");
-        img.className = "network-logo";
-        img.src = logoUrl;
-        img.alt = name;
-        img.onerror = () => img.remove();
-        nets.appendChild(img);
-      }else{
-        const span = document.createElement("span");
-        span.className = "network-text";
-        span.textContent = name;
-        nets.appendChild(span);
-      }
-    }
-    pill.appendChild(nets);
-  }
+  pill.appendChild(homeLogo);
 
   return pill;
 }
 
+/* ---------------------------------------------------------
+   BUILD INITIAL RAIL
+--------------------------------------------------------- */
+
 function buildInitialRail(items){
   rail.innerHTML = "";
-  for(const it of items){
-    if(it.type === "roundHeader"){
-      rail.appendChild(createHeaderPill(it.header, it.leagueKey || "nfl"));
-    }else{
+  for (const it of items) {
+    if (it.type === "roundHeader") {
+      rail.appendChild(createHeaderPill(it.header, it.leagueKey));
+    } else {
       rail.appendChild(createGamePill(it));
     }
   }
 }
 
-function detectScoreChanges(list){
-  const changedKeys = [];
-  const newMap = new Map();
-  for(const it of list){
-    if(it.type === "roundHeader") continue;
-    const k = scoreKey(it);
-    const scoreStr = `${it.away.score || "-"}-${it.home.score || "-"}`;
-    newMap.set(k, scoreStr);
-    const old = previousScoreMap.get(k);
-    if(old && old !== scoreStr) changedKeys.push(k);
-  }
-  previousScoreMap = newMap;
-  return changedKeys;
+/* ---------------------------------------------------------
+   LOOP ENGINE
+--------------------------------------------------------- */
+
+let x = 0;
+let lastTs = null;
+let smoothedFps = 60;
+let lastFpsTs = performance.now();
+
+function computeDynamicSpeed(){
+  return rail.scrollWidth / TARGET_LOOP_SECONDS;
 }
 
-function updatePillsInPlace(items){
-  const byKey = new Map();
-  for(const it of items){
-    if(it.type === "roundHeader") continue;
-    byKey.set(scoreKey(it), it);
-  }
-
-  const children = Array.from(rail.children);
-  for(const el of children){
-    if(el.dataset.type !== "game") continue;
-    const key = el.dataset.key;
-    const item = byKey.get(key);
-    if(!item) continue;
-
-    const stateCode = gameState(item);
-    const scoreEl = el.querySelector(".score");
-    const main = scoreEl.querySelector(".main");
-    const sub = scoreEl.querySelector(".sub");
-
-    if(stateCode === 0){
-      main.textContent = item.kickoff || "";
-      sub.textContent = "";
-      const finalBug = el.querySelector(".final");
-      if(finalBug) finalBug.remove();
-      const netsOld = el.querySelector(".networks");
-      if(netsOld) netsOld.remove();
-      if(Array.isArray(item.networks) && item.networks.length){
-        const nets = document.createElement("span");
-        nets.className = "networks";
-        for(const name of item.networks){
-          const logoUrl = NETWORK_LOGOS[name];
-          if(logoUrl){
-            const img = document.createElement("img");
-            img.className = "network-logo";
-            img.src = logoUrl;
-            img.alt = name;
-            img.onerror = () => img.remove();
-            nets.appendChild(img);
-          }else{
-            const span = document.createElement("span");
-            span.className = "network-text";
-            span.textContent = name;
-            nets.appendChild(span);
-          }
-        }
-        el.appendChild(nets);
-      }
-    }else{
-      main.textContent = `${item.away.score || "-"} – ${item.home.score || "-"}`;
-      if(item.isLive){
-        sub.textContent = item.statusText || "LIVE";
-      }else{
-        sub.textContent = item.statusText || "";
-      }
-      const netsOld = el.querySelector(".networks");
-      if(netsOld) netsOld.remove();
-      let finalBug = el.querySelector(".final");
-      if(gameState(item) === 2){
-        if(!finalBug){
-          finalBug = document.createElement("span");
-          finalBug.className = "final";
-          finalBug.textContent = "FINAL";
-          el.appendChild(finalBug);
-        }
-      }else if(finalBug){
-        finalBug.remove();
-      }
-    }
-  }
-}
-
-function cssEscape(str){
-  return String(str).replace(/["\\]/g, "\\$&");
-}
-
-/* CONTINUOUS LOOP */
 function loopFrame(ts){
-  // FPS smoothing
+  if (!lastTs) lastTs = ts;
+  const dt = (ts - lastTs) / 1000;
+  lastTs = ts;
+
   const frameTime = ts - lastFpsTs;
   lastFpsTs = ts;
   const currentFps = 1000 / frameTime;
   smoothedFps = smoothedFps * 0.9 + currentFps * 0.1;
 
-  if (!lastTs) lastTs = ts;
-  const dt = (ts - lastTs) / 1000;
-  lastTs = ts;
+  let dynamicSpeed = computeDynamicSpeed();
+  dynamicSpeed = Math.max(MIN_SPEED, Math.min(MAX_SPEED, dynamicSpeed));
 
-  // move left
-  const dynamicSpeed = computeDynamicSpeed();
   x -= dynamicSpeed * dt;
-
   rail.style.transform = `translateX(${x}px)`;
 
   const viewport = document.querySelector(".rail-viewport");
-  const vpRect = viewport.getBoundingClientRect();
-
-  // --- WRAP‑AROUND CORRECTION (one pill per frame) ---
   const first = rail.firstElementChild;
+
   if (first) {
     let width = pillWidthCache.get(first);
     if (!width) {
       width = first.getBoundingClientRect().width;
       pillWidthCache.set(first, width);
     }
-  
+
     const firstRect = first.getBoundingClientRect();
     const vpRect = viewport.getBoundingClientRect();
-  
+
     if (firstRect.right < vpRect.left) {
       rail.appendChild(first);
       x += width;
@@ -685,42 +448,26 @@ function loopFrame(ts){
     }
   }
 
-
   requestAnimationFrame(loopFrame);
 }
 
-function computeDynamicSpeed(){
-  const totalWidth = rail.scrollWidth;
-  const targetLoopSeconds = 36; // your preferred loop duration
-  return totalWidth / targetLoopSeconds;
-}
+/* ---------------------------------------------------------
+   BOOTSTRAP
+--------------------------------------------------------- */
 
-/* MAIN */
 async function bootstrapTicker(){
   const items = await fetchScores();
   buildInitialRail(items);
-  detectScoreChanges(items); // initialize map
   requestAnimationFrame(loopFrame);
 
   setInterval(async ()=>{
-    const latest = await fetchScores();
-    const changed = detectScoreChanges(latest);
-    updatePillsInPlace(latest);
-
-    if(changed.length){
-      for(const key of changed){
-        const pill = rail.querySelector(`.pill[data-key="${cssEscape(key)}"]`);
-        if(pill){
-          pill.classList.add("score-flash");
-          setTimeout(()=>pill.classList.remove("score-flash"), 1100);
-        }
-      }
-    }
-  }, REFRESH_MS);
+    const updated = await fetchScores();
+    // No rebuild needed — continuous loop handles updates
+  }, 15000);
 }
 
 bootstrapTicker();
-
 </script>
+
 </body>
 </html>
