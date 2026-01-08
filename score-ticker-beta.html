@@ -6,15 +6,15 @@
 
 <style>
 :root {
-  --bar-h: 48px;
+  --bar-h: 52px;
   --bg: #111;
   --text: #fff;
-  --pill-bg: #1a1a1a;
-  --pill-pad: 10px 14px;
-  --sep: 18px;
+  --pill-bg: #242424;
+  --pill-pad: 10px 18px;
+  --sep: 22px;
   --round-bg: #222;
   --round-text: #fff;
-  --font: 14px;
+  --font: 28px;
 }
 
 /* Container */
@@ -66,15 +66,17 @@ body {
   color: var(--text);
   padding: var(--pill-pad);
   margin-right: var(--sep);
-  border-radius: 4px;
+  border-radius: 999px;
   font-size: var(--font);
   height: calc(var(--bar-h) - 12px);
+  border: 1px solid rgba(255,255,255,0.12);
+  box-shadow: 0 0 6px rgba(0,0,0,0.45);
 }
 
 .pill img.logo {
   height: calc(var(--bar-h) * 0.55);
   width: auto;
-  margin-right: 8px;
+  margin-right: 10px;
 }
 
 /* Header pills */
@@ -88,14 +90,17 @@ body {
 .header-pill .logo {
   width: calc(var(--bar-h) * 0.45);
   height: auto;
-  margin-right: 8px;
+  margin-right: 10px;
 }
 
 /* Team logos */
 .team-logo {
   height: calc(var(--bar-h) * 0.55);
   width: auto;
-  margin: 0 6px;
+  margin: 0 8px;
+  border: 1px solid rgba(255,255,255,0.25);
+  border-radius: 6px;
+  background: rgba(255,255,255,0.05);
 }
 
 /* Score flash */
@@ -419,7 +424,7 @@ function createGamePill(item){
   home.textContent = item.home.abbr;
 
   const score = document.createElement("span");
-  score.style.margin = "0 8px";
+  score.style.margin = "0 10px";
 
   const state = gameState(item);
   if (state === 0) {
@@ -531,12 +536,9 @@ async function refreshData(){
   const items = await fetchScores();
   if (!items || !items.length) return;
 
-  // Build into staging rail off-screen
   const isSuperBowl = buildRailInto(railStaging, items);
 
-  // Atomic swap between frames
   requestAnimationFrame(() => {
-    // Preserve current offset relative to new content
     const oldRail = rail;
     const oldWidth = oldRail.scrollWidth || 1;
     const oldX = x;
@@ -544,15 +546,12 @@ async function refreshData(){
     rail = railStaging;
     railStaging = oldRail;
 
-    // Put staging off-screen again
     railStaging.style.display = "none";
     rail.style.display = "inline-flex";
 
-    // Reset caches for new nodes
     pillWidthCache = new WeakMap();
     viewportRectCache = null;
 
-    // Adjust x proportionally to new width to avoid jumps
     const newWidth = rail.scrollWidth || 1;
     const ratio = newWidth / oldWidth;
     x = oldX * ratio;
