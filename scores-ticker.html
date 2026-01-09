@@ -226,21 +226,26 @@ function gameState(item){
   if((item.statusText||'').toUpperCase().includes('FINAL')) return 2;
   return 0;
 }
-function gameSort(a,b){ return pstTimestamp(a.iso) - pstTimestamp(b.iso); }
+function gameSort(a, b) {
+  const stateA = gameState(a); // 1 = live, 0 = future, 2 = final
+  const stateB = gameState(b);
 
-/* -------------------------
-   FETCH (proxy)
-   ------------------------- */
-async function fetchJson(url){
-  const proxy = "https://corsproxy.io/?";
-  try{
-    const r = await fetch(proxy + encodeURIComponent(url), { cache: "no-store" });
-    if(r.ok) return r.json();
-  }catch(e){
-    console.error('fetchJson error', e);
-  }
-  return null;
+  // LIVE first
+  if (stateA === 1 && stateB !== 1) return -1;
+  if (stateB === 1 && stateA !== 1) return 1;
+
+  // FUTURE next
+  if (stateA === 0 && stateB !== 0) return -1;
+  if (stateB === 0 && stateA !== 0) return 1;
+
+  // FINAL last
+  if (stateA === 2 && stateB !== 2) return 1;
+  if (stateB === 2 && stateA !== 2) return -1;
+
+  // If same category, sort by time
+  return pstTimestamp(a.iso) - pstTimestamp(b.iso);
 }
+
 
 /* -------------------------
    UNIFIED SCORE FETCH
@@ -576,3 +581,4 @@ bootstrapTicker();
 
 </body>
 </html>
+
