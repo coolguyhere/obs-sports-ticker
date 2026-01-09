@@ -15,7 +15,7 @@
   --sep: 20px;
   --round-bg: #222;
   --round-text: #fff;
-  --font: 24px;
+  --font: 24px; /* updated to 24px */
   --pill-radius: 4px; /* ESPN-style slightly rounded corners */
 }
 
@@ -226,26 +226,43 @@ function gameState(item){
   if((item.statusText||'').toUpperCase().includes('FINAL')) return 2;
   return 0;
 }
-function gameSort(a, b) {
-  const stateA = gameState(a); // 1 = live, 0 = future, 2 = final
-  const stateB = gameState(b);
+
+/* comparator used inside each league: LIVE -> FUTURE -> FINAL, then by time */
+function compareGameWithinLeague(a,b){
+  const sa = gameState(a);
+  const sb = gameState(b);
 
   // LIVE first
-  if (stateA === 1 && stateB !== 1) return -1;
-  if (stateB === 1 && stateA !== 1) return 1;
+  if(sa === 1 && sb !== 1) return -1;
+  if(sb === 1 && sa !== 1) return 1;
 
   // FUTURE next
-  if (stateA === 0 && stateB !== 0) return -1;
-  if (stateB === 0 && stateA !== 0) return 1;
+  if(sa === 0 && sb !== 0) return -1;
+  if(sb === 0 && sa !== 0) return 1;
 
   // FINAL last
-  if (stateA === 2 && stateB !== 2) return 1;
-  if (stateB === 2 && stateA !== 2) return -1;
+  if(sa === 2 && sb !== 2) return 1;
+  if(sb === 2 && sa !== 2) return -1;
 
-  // If same category, sort by time
+  // same category: sort by kickoff time ascending
   return pstTimestamp(a.iso) - pstTimestamp(b.iso);
 }
 
+function gameSort(a,b){ return pstTimestamp(a.iso) - pstTimestamp(b.iso); } // fallback
+
+/* -------------------------
+   FETCH (proxy)
+   ------------------------- */
+async function fetchJson(url){
+  const proxy = "https://corsproxy.io/?";
+  try{
+    const r = await fetch(proxy + encodeURIComponent(url), { cache: "no-store" });
+    if(r.ok) return r.json();
+  }catch(e){
+    console.error('fetchJson error', e);
+  }
+  return null;
+}
 
 /* -------------------------
    UNIFIED SCORE FETCH
@@ -308,7 +325,7 @@ async function fetchScores(){
           round,
           iso,
           kickoff,
-          networks: [], // removed networks entirely
+          networks: [],
           away: { abbr: awayAbbr, logo: awayLogo, score: awayScore },
           home: { abbr: homeAbbr, logo: homeLogo, score: homeScore },
           isLive,
@@ -324,16 +341,21 @@ async function fetchScores(){
       }
 
       const leagueItems = [];
+
+      // Playoff rounds: for each round, sort using league comparator
       const rounds = Object.keys(playoffGroups).sort();
       for(const r of rounds){
-        const arr = playoffGroups[r].slice().sort(gameSort);
+        const arr = playoffGroups[r].slice();
+        arr.sort(compareGameWithinLeague);
         if(arr.length){
           leagueItems.push({ type:'roundHeader', header:r, leagueKey });
           leagueItems.push(...arr);
         }
       }
 
-      const regularSorted = regulars.slice().sort(gameSort);
+      // Regular season games: sort using league comparator
+      const regularSorted = regulars.slice();
+      regularSorted.sort(compareGameWithinLeague);
       if(regularSorted.length){
         leagueItems.push({ type:'roundHeader', header:'Regular', leagueKey });
         leagueItems.push(...regularSorted);
@@ -346,7 +368,7 @@ async function fetchScores(){
     }
   }
 
-  // dedupe
+  // dedupe across the combined list (keeps headers)
   const seen = new Set();
   const dedup = [];
   for(const it of allItems){
@@ -581,4 +603,3 @@ bootstrapTicker();
 
 </body>
 </html>
-
