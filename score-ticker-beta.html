@@ -11,8 +11,8 @@
   --bg: #0f0f10;
   --text: #ffffff;
   --pill-bg: #242424; /* Medium contrast */
-  --pill-pad: 10px 18px;
-  --sep: 22px;
+  --pill-pad: 8px 16px; /* slightly tighter to fit date+time */
+  --sep: 20px;
   --round-bg: #222;
   --round-text: #fff;
   --font: 28px;
@@ -77,6 +77,7 @@ html,body{height:100%;margin:0;background:#000;font-family:Arial,Helvetica,sans-
   height:calc(var(--bar-h) - 12px);
   border:1px solid rgba(255,255,255,0.12);
   box-shadow:0 0 6px rgba(0,0,0,0.45);
+  gap:8px;
 }
 
 /* Header pill */
@@ -85,14 +86,16 @@ html,body{height:100%;margin:0;background:#000;font-family:Arial,Helvetica,sans-
   color:var(--round-text);
   font-weight:700;
   text-transform:uppercase;
+  padding-left:14px;
+  padding-right:14px;
 }
 
 /* Logos */
-.pill img.logo{ height:calc(var(--bar-h) * 0.55); width:auto; margin-right:10px; display:inline-block; }
+.pill img.logo{ height:calc(var(--bar-h) * 0.55); width:auto; margin-right:6px; display:inline-block; }
 .team-logo{
   height:calc(var(--bar-h) * 0.55);
   width:auto;
-  margin:0 8px;
+  margin:0 6px;
   border:1px solid rgba(255,255,255,0.25);
   border-radius:6px;
   background:rgba(255,255,255,0.05);
@@ -128,7 +131,7 @@ html,body{height:100%;margin:0;background:#000;font-family:Arial,Helvetica,sans-
 
 /* Small responsive tweak */
 @media (max-width:520px){
-  :root{ --font:18px; --bar-h:44px; --pill-pad:8px 12px; --sep:14px; }
+  :root{ --font:18px; --bar-h:44px; --pill-pad:6px 10px; --sep:14px; }
   .team-logo, .pill img.logo{ height:calc(var(--bar-h) * 0.55); }
 }
 </style>
@@ -199,6 +202,16 @@ function pstTimestamp(iso){ return new Date(iso).getTime(); }
 function formatPST(iso){
   const d = new Date(iso);
   return d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',timeZone:'America/Los_Angeles'});
+}
+function formatDateTimeMMDD(iso){
+  const d = new Date(iso);
+  const mm = String(d.getMonth() + 1).padStart(2,'0');
+  const dd = String(d.getDate()).padStart(2,'0');
+  let h = d.getHours();
+  const m = String(d.getMinutes()).padStart(2,'0');
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  return `${mm}/${dd} ${h}:${m} ${ampm}`;
 }
 function normalizeRound(raw){
   const t = (raw||'').toUpperCase();
@@ -388,11 +401,17 @@ function createGamePill(item){
 
   const score = document.createElement('span');
   score.style.margin = '0 10px';
+  score.style.whiteSpace = 'nowrap';
 
   const state = gameState(item);
-  if(state === 0) score.textContent = item.kickoff;
-  else if(state === 1) score.textContent = `${item.away.score} - ${item.home.score} LIVE`;
-  else score.textContent = `${item.away.score} - ${item.home.score} FINAL`;
+  if(state === 0) {
+    // future game: show MM/DD HH:MM AM/PM on same line
+    score.textContent = formatDateTimeMMDD(item.iso);
+  } else if(state === 1) {
+    score.textContent = `${item.away.score} - ${item.home.score} LIVE`;
+  } else {
+    score.textContent = `${item.away.score} - ${item.home.score} FINAL`;
+  }
 
   pill.appendChild(awayLogo);
   pill.appendChild(away);
