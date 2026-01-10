@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Vertical Play Highlights — Client Demo</title>
+<style>
+  :root{
+    --panel-w: 360px;
+    --panel-w-mobile: 92vw;
+    --bg: rgba(6,6,6,0.78);
+    --accent: #d32f2f;
+    --muted: rgba(255,255,255,0.12);
+    --text: #fff;
+    --pill-radius: 8px;
+    --font-base: 15px;
+    --font-strong: 13px;
+  }
+
+  /* Container (OBS/overlay friendly) */
+  .v-ticker {
+    position: fixed;
+    right: 14px;
+    top: 96px;
+    width: var(--panel-w);
+    max-height: 56vh;
+    background: linear-gradient(180deg, rgba(12,12,12,0.9), rgba(6,6,6,0.85));
+    border: 1px solid var(--muted);
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 99999;
+    font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    color: var(--text);
+    border-radius: 10px;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.6);
+    backdrop-filter: blur(6px);
+    box-sizing: border-box;
+  }
+
+  /* Responsive: mobile / OBS small screens */
+  @media (max-width: 520px){
+    .v-ticker { right: 4vw; top: 6vh; width: var(--panel-w-mobile); max-height: 60vh; padding: 8px; }
+  }
+
+  .v-header {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+  }
+  .v-title {
+    font-weight:700;
+    font-size:16px;
+    letter-spacing:0.2px;
+  }
+  .v-controls {
+    display:flex;
+    gap:6px;
+    align-items:center;
+  }
+  .v-controls select, .v-controls button {
+    background:transparent;
+    color:var(--text);
+    border:1px solid var(--muted);
+    padding:6px 8px;
+    border-radius:6px;
+    font-size:13px;
+  }
+  .v-controls button { cursor:pointer; }
+  .v-controls button.primary {
+    background: linear-gradient(90deg,#ff6b6b,#ff3b3b);
+    border: none;
+    color: #fff;
+    padding:6px 10px;
+  }
+
+  .v-list {
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    overflow:hidden;
+  }
+
+  .v-scroll {
+    overflow-y:auto;
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    padding-right:6px;
+  }
+
+  .play {
+    display:flex;
+    gap:10px;
+    align-items:flex-start;
+    padding:10px;
+    background: rgba(255,255,255,0.02);
+    border-radius: var(--pill-radius);
+    border:1px solid rgba(255,255,255,0.03);
+    transition: transform 220ms ease, box-shadow 220ms ease;
+    font-size: var(--font-base);
+    line-height:1.15;
+  }
+  .play:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.45); }
+
+  .meta {
+    min-width:56px;
+    font-weight:700;
+    color:#ffd;
+    font-size:var(--font-strong);
+    text-align:left;
+  }
+
+  .body {
+    flex:1;
+    color:var(--text);
+    font-size:var(--font-base);
+  }
+
+  .play.scoring {
+    border:1px solid rgba(212,175,55,0.22);
+    background: linear-gradient(90deg, rgba(212,175,55,0.06), rgba(255,255,255,0.02));
+  }
+
+  .empty {
+    color:rgba(255,255,255,0.45);
+    font-size:13px;
+    padding:8px;
+    text-align:center;
+  }
+
+  .small {
+    font-size:12px;
+    color:rgba(255,255,255,0.6);
+  }
+
+  /* compact scrollbar for OBS */
+  .v-scroll::-webkit-scrollbar { width:8px; }
+  .v-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius:6px; }
+  .v-scroll::-webkit-scrollbar-track { background: transparent; }
+
+  /* accessibility focus */
+  .v-controls select:focus, .v-controls button:focus { outline: 2px solid rgba(255,255,255,0.08); outline-offset:2px; }
+
+  /* small helper */
+  .muted { color: rgba(255,255,255,0.5); font-size:12px; }
+</style>
+</head>
+<body>
+
+<!-- Vertical Play Highlights Ticker (client demo) -->
+<div class="v-ticker" id="vTicker" aria-live="polite" aria-atomic="true" role="region" aria-label="Play highlights">
+  <div class="v-header">
+    <div>
+      <div class="v-title">Play Highlights</div>
+      <div class="small muted" id="vStatus">idle</div>
+    </div>
+
+    <div class="v-controls" aria-hidden="false">
+      <select id="leagueSelect" title="League">
+        <option value="nfl">NFL</option>
+        <option value="nba">NBA</option>
+        <option value="mlb">MLB</option>
+        <option value="nhl">NHL</option>
+      </select>
+
+      <select id="gameSelect" title="Choose game">
+        <option value="">— select game —</option>
+      </select>
+
+      <button id="startBtn" class="primary">Start</button>
+      <button id="stopBtn">Stop</button>
+    </div>
+  </div>
+
+  <div class="v-list">
+    <div class="v-scroll" id="vList" role="list"></div>
+  </div>
+</div>
+
+<script>
+/*
+  Client demo: vertical play highlights ticker
+  - Mobile friendly and OBS overlay friendly
+  - Uses ESPN public JSON patterns via a CORS proxy (client demo only)
+  - Recommended: for production, move requests server-side to avoid CORS and rate limits
+*/
+
+/* CONFIG */
+const PROXY = "https://corsproxy.io/?"; // demo proxy; replace with your server proxy for production
+const LEAGUE_PATHS = {
+  nfl: { sport: "football", league: "nfl" },
+  nba: { sport: "basketball", league: "nba" },
+  mlb: { sport: "baseball", league: "mlb" },
+  nhl: { sport: "hockey", league: "nhl" }
+};
+const POLL_INTERVAL_MS = 3500; // poll play-by-play every ~3.5s for live games
+const MAX_ITEMS = 6;           // how many plays to show
+const PIN_SCORING_MS = 12000;  // scoring plays pinned longer
+
+/* STATE */
+let pollTimer = null;
+let currentEventId = null;
+let seenPlays = new Set();
+let isRunning = false;
+
+/* DOM */
+const leagueSelect = document.getElementById('leagueSelect');
+const gameSelect = document.getElementById('gameSelect');
+const startBtn = document.getElementById('startBtn');
+const stopBtn = document.getElementById('stopBtn');
+const vList = document.getElementById('vList');
+const vStatus = document.getElementById('vStatus');
+
+/* HELPERS */
+function safe(obj, path, fallback = "") {
+  try { return path.split('.').reduce((o,k)=>o[k], obj) ?? fallback; } catch { return fallback; }
+}
+function nowISO(){ return new Date().toISOString(); }
+function shortClock(play){
+  // try to extract clock and period
+  const clock = safe(play, 'clock', '') || safe(play, 'time', '') || '';
+  const period = safe(play, 'period', '') || safe(play, 'quarter', '') || '';
+  if(clock && period) return `${period} ${clock}`;
+  if(clock) return clock;
+  return '';
+}
+function isScoringPlay(play){
+  // heuristics: look for scoring keywords or play type
+  const text = (safe(play,'text','') + ' ' + safe(play,'playType','') + ' ' + safe(play,'type','')).toLowerCase();
+  return /touchdown|td|field goal|fg|score|safety|extra point|two-point|two point|go-ahead|go ahead|scoring/.test(text);
+}
+
+/* RENDER */
+function renderPlayNode(play){
+  const el = document.createElement('div');
+  el.className = 'play' + (isScoringPlay(play) ? ' scoring' : '');
+  el.setAttribute('role','listitem');
+  el.dataset.playId = safe(play,'id', nowISO() + Math.random());
+
+  const meta = document.createElement('div');
+  meta.className = 'meta';
+  meta.textContent = shortClock(play) || safe(play,'period','');
+
+  const body = document.createElement('div');
+  body.className = 'body';
+  // prefer descriptive fields
+  const desc = safe(play,'text', '') || safe(play,'description', '') || safe(play,'playDescription','') || '';
+  // highlight team/player names lightly (simple heuristic)
+  body.innerHTML = desc.replace(/([A-Z]{2,4})/g, '<strong>$1</strong>');
+
+  el.appendChild(meta);
+  el.appendChild(body);
+  return el;
+}
+
+function pushPlay(play){
+  const id = safe(play,'id', null) || (safe(play,'playId', null) || null);
+  if(id && seenPlays.has(id)) return;
+  if(id) seenPlays.add(id);
+
+  const node = renderPlayNode(play);
+  // insert at top
+  vList.insertBefore(node, vList.firstChild);
+
+  // trim
+  while(vList.children.length > MAX_ITEMS) vList.removeChild(vList.lastChild);
+
+  // pin scoring plays visually longer (no removal)
+  if(isScoringPlay(play)){
+    node.style.transition = 'none';
+    setTimeout(()=> node.style.transition = '', PIN_SCORING_MS);
+  }
+}
+
+/* FETCH SCOREBOARD -> populate gameSelect */
+async function fetchScoreboard(leagueKey){
+  gameSelect.innerHTML = '<option value="">Loading…</option>';
+  const cfg = LEAGUE_PATHS[leagueKey];
+  if(!cfg){ gameSelect.innerHTML = '<option value="">No league</option>'; return; }
+
+  const url = `https://site.api.espn.com/apis/site/v2/sports/${cfg.sport}/${cfg.league}/scoreboard`;
+  try{
+    const res = await fetch(PROXY + encodeURIComponent(url));
+    if(!res.ok) throw new Error('scoreboard fetch failed');
+    const data = await res.json();
+
+    const events = safe(data,'events', []);
+    // build options: show live first, then upcoming, then final
+    const opts = [];
+    for(const ev of events){
+      const comp = safe(ev,'competitions.0', {});
+      const id = safe(ev,'id', '') || safe(ev,'uid','');
+      const status = safe(comp,'status.type.state','');
+      const home = safe(comp,'competitors',[]).find(c=>c.homeAway==='home') || {};
+      const away = safe(comp,'competitors',[]).find(c=>c.homeAway==='away') || {};
+      const homeAbbr = safe(home,'team.abbreviation', safe(home,'team.displayName',''));
+      const awayAbbr = safe(away,'team.abbreviation', safe(away,'team.displayName',''));
+      const iso = safe(ev,'date','') || safe(comp,'date','');
+      const kickoff = iso ? new Date(iso).toLocaleString() : '';
+      const label = `${awayAbbr} @ ${homeAbbr} — ${status.toUpperCase() || 'SCHEDULED'} ${kickoff ? '• ' + kickoff : ''}`;
+      opts.push({ id, label, state: status });
+    }
+
+    // sort: live first, then scheduled, then final
+    opts.sort((a,b)=>{
+      const order = s => (s === 'in' ? 0 : (s === 'pre' || s === '' ? 1 : 2));
+      return order(a.state) - order(b.state);
+    });
+
+    gameSelect.innerHTML = '<option value="">— select game —</option>';
+    for(const o of opts){
+      const opt = document.createElement('option');
+      opt.value = o.id;
+      opt.textContent = o.label;
+      gameSelect.appendChild(opt);
+    }
+    vStatus.textContent = `loaded ${opts.length} games`;
+  }catch(err){
+    console.error(err);
+    gameSelect.innerHTML = '<option value="">failed to load</option>';
+    vStatus.textContent = 'scoreboard error';
+  }
+}
+
+/* FETCH play-by-play for eventId */
+async function fetchPlayByPlay(leagueKey, eventId){
+  if(!eventId) return null;
+  const cfg = LEAGUE_PATHS[leagueKey];
+  if(!cfg) return null;
+
+  // pattern used by ESPN web app (may vary by sport)
+  const url = `https://site.api.espn.com/apis/site/v2/sports/${cfg.sport}/${cfg.league}/playbyplay?event=${encodeURIComponent(eventId)}`;
+  try{
+    const res = await fetch(PROXY + encodeURIComponent(url));
+    if(!res.ok) throw new Error('playbyplay fetch failed');
+    const data = await res.json();
+    // plays often live under data.plays or data.drives[].plays
+    let plays = safe(data,'plays', null);
+    if(!plays){
+      // try drives -> plays
+      const drives = safe(data,'drives', []);
+      plays = [];
+      for(const d of drives){
+        const p = safe(d,'plays', []);
+        if(Array.isArray(p)) plays.push(...p);
+      }
+    }
+    // fallback: try data.playByPlay.plays
+    if(!plays) plays = safe(data,'playByPlay.plays', []);
+    // normalize: ensure each play has id and text
+    if(!Array.isArray(plays)) plays = [];
+    return plays;
+  }catch(err){
+    console.error('playbyplay error', err);
+    return null;
+  }
+}
+
+/* POLLER */
+async function pollPlays(){
+  if(!isRunning || !currentEventId) return;
+  vStatus.textContent = `polling ${currentEventId}…`;
+  const leagueKey = leagueSelect.value;
+  const plays = await fetchPlayByPlay(leagueKey, currentEventId);
+  if(!plays){
+    vStatus.textContent = 'no plays';
+    return;
+  }
+
+  // plays may be in chronological order; we want newest first
+  // iterate from end to start to push newest first
+  for(let i = plays.length - 1; i >= 0; i--){
+    const p = plays[i];
+    // normalize id: try multiple fields
+    const id = safe(p,'id') || safe(p,'playId') || safe(p,'sequence') || (safe(p,'clock') + '_' + i);
+    if(!id) p.id = nowISO() + '_' + i; else p.id = id;
+    // text fields vary by sport: try multiple
+    p.text = safe(p,'text') || safe(p,'playText') || safe(p,'description') || safe(p,'playDescription') || '';
+    p.clock = safe(p,'clock') || safe(p,'time') || '';
+    p.period = safe(p,'period') || safe(p,'quarter') || '';
+    // push
+    pushPlay(p);
+  }
+  vStatus.textContent = `updated ${new Date().toLocaleTimeString()}`;
+}
+
+/* START / STOP */
+function startPolling(){
+  if(isRunning) return;
+  const selected = gameSelect.value;
+  if(!selected){ alert('Select a game first'); return; }
+  currentEventId = selected;
+  isRunning = true;
+  seenPlays.clear();
+  vList.innerHTML = '';
+  vStatus.textContent = 'starting…';
+  // initial fetch then interval
+  pollPlays();
+  pollTimer = setInterval(pollPlays, POLL_INTERVAL_MS);
+}
+
+function stopPolling(){
+  isRunning = false;
+  currentEventId = null;
+  if(pollTimer){ clearInterval(pollTimer); pollTimer = null; }
+  vStatus.textContent = 'stopped';
+}
+
+/* UI wiring */
+leagueSelect.addEventListener('change', ()=> fetchScoreboard(leagueSelect.value));
+startBtn.addEventListener('click', startPolling);
+stopBtn.addEventListener('click', stopPolling);
+
+/* initial load */
+fetchScoreboard(leagueSelect.value);
+
+/* optional: refresh scoreboard periodically */
+setInterval(()=> fetchScoreboard(leagueSelect.value), 30000);
+</script>
+</body>
+</html>
