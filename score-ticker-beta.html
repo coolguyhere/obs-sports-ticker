@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Sports Ticker — Bottom Rail with LIVE Quarter (Scores Visible)</title>
+<title>Sports Ticker — Bottom Rail with LIVE Quarter (Fixed Layout)</title>
 
 <style>
 :root{
@@ -122,15 +122,23 @@ html,body{height:100%;margin:0;background:#000;font-family:Arial,Helvetica,sans-
   display:inline-block;
 }
 
-/* Status stack for LIVE + quarter/half */
+/* Status inline container: score + small LIVE/period stack to the right */
+.status-inline{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  white-space:nowrap;
+}
+
+/* small stacked LIVE/period */
 .status-stack{
   display:flex;
   flex-direction:column;
   align-items:center;
   justify-content:center;
-  min-width:64px;
   line-height:1;
   white-space:nowrap;
+  min-width:48px;
 }
 .status-main{
   font-weight:700;
@@ -152,10 +160,10 @@ html,body{height:100%;margin:0;background:#000;font-family:Arial,Helvetica,sans-
   font-weight:700;
 }
 
-/* Compact score pair for live */
+/* Compact score pair for live (keeps scores inline) */
 .score-pair{
   display:flex;
-  gap:8px;
+  gap:6px;
   align-items:center;
   font-weight:700;
   font-size:var(--font);
@@ -477,13 +485,9 @@ function createGamePill(item){
   const home = document.createElement('span');
   home.textContent = item.home.abbr;
 
-  // status/score container
-  const statusContainer = document.createElement('div');
-  statusContainer.style.display = 'flex';
-  statusContainer.style.alignItems = 'center';
-  statusContainer.style.justifyContent = 'center';
-  statusContainer.style.flexDirection = 'column';
-  statusContainer.style.gap = '2px';
+  // status inline container: score + small LIVE/period stack to the right
+  const statusInline = document.createElement('div');
+  statusInline.className = 'status-inline';
 
   const state = gameState(item);
 
@@ -492,9 +496,9 @@ function createGamePill(item){
     const score = document.createElement('span');
     score.className = 'score-text';
     score.textContent = formatDateTimeMMDD(item.iso);
-    statusContainer.appendChild(score);
+    statusInline.appendChild(score);
   } else if(state === 1) {
-    // LIVE: show scores prominently and a stacked LIVE + period label underneath
+    // LIVE: show scores inline, then a small stacked LIVE + period to the right
     const scorePair = document.createElement('div');
     scorePair.className = 'score-pair';
     const awayScore = document.createElement('span');
@@ -523,19 +527,19 @@ function createGamePill(item){
     stack.appendChild(main);
     stack.appendChild(sub);
 
-    statusContainer.appendChild(scorePair);
-    statusContainer.appendChild(stack);
+    statusInline.appendChild(scorePair);
+    statusInline.appendChild(stack);
   } else {
     // FINAL
     const score = document.createElement('span');
     score.className = 'score-text';
     score.textContent = `${item.away.score} - ${item.home.score} FINAL`;
-    statusContainer.appendChild(score);
+    statusInline.appendChild(score);
   }
 
   pill.appendChild(awayLogo);
   pill.appendChild(away);
-  pill.appendChild(statusContainer);
+  pill.appendChild(statusInline);
   pill.appendChild(home);
   pill.appendChild(homeLogo);
 
