@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Sports Ticker — Bottom Rail with LIVE Quarter</title>
+<title>Sports Ticker — Bottom Rail with LIVE Quarter (Scores Visible)</title>
 
 <style>
 :root{
@@ -21,6 +21,9 @@
   --live-font-size: 13px;
   --live-subfont-size: 11px;
   --live-color: #ff4b4b;
+  /* PST pill */
+  --pst-bg: #1f4b8f;
+  --pst-text: #fff;
 }
 
 /* Page */
@@ -84,6 +87,19 @@ html,body{height:100%;margin:0;background:#000;font-family:Arial,Helvetica,sans-
   gap:8px;
 }
 
+/* PST pill */
+.pst-pill{
+  background:var(--pst-bg);
+  color:var(--pst-text);
+  font-weight:700;
+  text-transform:uppercase;
+  padding:6px 12px;
+  border-radius:6px;
+  border:1px solid rgba(255,255,255,0.06);
+  box-shadow:0 2px 8px rgba(0,0,0,0.35);
+  font-size:14px;
+}
+
 /* Header pill */
 .header-pill{
   background:var(--round-bg);
@@ -129,10 +145,20 @@ html,body{height:100%;margin:0;background:#000;font-family:Arial,Helvetica,sans-
   margin-top:2px;
 }
 
-/* Score text for future/final */
+/* Score text for future/final and live scores */
 .score-text{
   font-size:var(--font);
   white-space:nowrap;
+  font-weight:700;
+}
+
+/* Compact score pair for live */
+.score-pair{
+  display:flex;
+  gap:8px;
+  align-items:center;
+  font-weight:700;
+  font-size:var(--font);
 }
 
 /* Super Bowl Theme (kept) */
@@ -161,6 +187,7 @@ html,body{height:100%;margin:0;background:#000;font-family:Arial,Helvetica,sans-
 @media (max-width:520px){
   :root{ --font:18px; --bar-h:44px; --pill-pad:6px 10px; --sep:14px; --live-font-size:12px; --live-subfont-size:10px; }
   .team-logo, .pill img.logo{ height:calc(var(--bar-h) * 0.55); }
+  .pst-pill{ font-size:12px; padding:6px 10px; }
 }
 </style>
 </head>
@@ -270,7 +297,7 @@ async function fetchJson(url){
 }
 
 /* -------------------------
-   UNIFIED SCORE FETCH (captures period/clock)
+   UNIFIED SCORE FETCH (captures period/clock and scores)
    ------------------------- */
 async function fetchScores(){
   const now = Date.now();
@@ -312,7 +339,7 @@ async function fetchScores(){
         const isLive = state === 'in';
         const statusText = isLive ? 'LIVE' : (safe(status,'shortDetail','') || safe(status,'type.text','') || '');
 
-        // capture displayClock and period when available
+        // capture displayClock and period when available (we will ignore displayClock in UI)
         const displayClock = safe(status, 'displayClock', '') || safe(comp, 'status.displayClock', '') || '';
         const period = safe(status, 'period', '') || safe(comp, 'status.period', '') || '';
 
@@ -320,8 +347,8 @@ async function fetchScores(){
         const homeLogo = safe(home, 'team.logo', safe(home,'team.logos.0.href',''));
         const awayAbbr = (safe(away,'team.abbreviation', safe(away,'team.displayName','')) || '').toUpperCase();
         const homeAbbr = (safe(home,'team.abbreviation', safe(home,'team.displayName','')) || '').toUpperCase();
-        const awayScore = safe(away,'score','');
-        const homeScore = safe(home,'score','');
+        const awayScore = safe(away,'score','') || '';
+        const homeScore = safe(home,'score','') || '';
 
         const isPlayoff = seasonType === 3;
         const roundRaw = safe(comp, 'notes.0.headline', safe(ev,'league.name','Playoffs'));
@@ -389,8 +416,15 @@ async function fetchScores(){
 }
 
 /* -------------------------
-   RENDERING HELPERS (LIVE badge with period)
+   RENDERING HELPERS (PST pill + LIVE badge with scores)
    ------------------------- */
+function createPSTPill(){
+  const pill = document.createElement('span');
+  pill.className = 'pill pst-pill';
+  pill.textContent = 'All times PST';
+  return pill;
+}
+
 function createHeaderPill(text, leagueKey){
   const pill = document.createElement('span');
   pill.className = 'pill header-pill';
@@ -420,7 +454,6 @@ function periodLabelForLeague(leagueKey, period){
     if(leagueKey === 'nfl' || leagueKey === 'nba' || leagueKey === 'nhl') return `Q${p}`; // quarter
     return `P${p}`;
   }
-  // non-numeric values (e.g., 'HALF' or 'OT')
   return String(period).toUpperCase();
 }
 
@@ -449,6 +482,8 @@ function createGamePill(item){
   statusContainer.style.display = 'flex';
   statusContainer.style.alignItems = 'center';
   statusContainer.style.justifyContent = 'center';
+  statusContainer.style.flexDirection = 'column';
+  statusContainer.style.gap = '2px';
 
   const state = gameState(item);
 
@@ -459,7 +494,19 @@ function createGamePill(item){
     score.textContent = formatDateTimeMMDD(item.iso);
     statusContainer.appendChild(score);
   } else if(state === 1) {
-    // LIVE: show stacked LIVE + quarter/half (and optionally clock)
+    // LIVE: show scores prominently and a stacked LIVE + period label underneath
+    const scorePair = document.createElement('div');
+    scorePair.className = 'score-pair';
+    const awayScore = document.createElement('span');
+    awayScore.textContent = item.away.score || '0';
+    const dash = document.createElement('span');
+    dash.textContent = '–';
+    const homeScore = document.createElement('span');
+    homeScore.textContent = item.home.score || '0';
+    scorePair.appendChild(awayScore);
+    scorePair.appendChild(dash);
+    scorePair.appendChild(homeScore);
+
     const stack = document.createElement('div');
     stack.className = 'status-stack';
 
@@ -469,13 +516,14 @@ function createGamePill(item){
 
     const sub = document.createElement('div');
     sub.className = 'status-sub';
-    // compute period label and optionally show clock
+    // show only period/half/inning/OT — explicitly exclude clock/time-left
     const periodLabel = periodLabelForLeague(item.leagueKey, item.period);
-    const clock = item.displayClock || '';
-    sub.textContent = periodLabel ? `${periodLabel}${clock ? ' • ' + clock : ''}` : (clock || '');
+    sub.textContent = periodLabel || '';
 
     stack.appendChild(main);
     stack.appendChild(sub);
+
+    statusContainer.appendChild(scorePair);
     statusContainer.appendChild(stack);
   } else {
     // FINAL
@@ -495,11 +543,16 @@ function createGamePill(item){
 }
 
 /* -------------------------
-   BUILD DOUBLE RAILS
+   BUILD DOUBLE RAILS (prepend PST pill)
    ------------------------- */
 function buildDoubleRail(items){
   rail.innerHTML = '';
   railDup.innerHTML = '';
+
+  // create PST pill once and prepend to both rails
+  const pst = createPSTPill();
+  rail.appendChild(pst.cloneNode(true));
+  railDup.appendChild(pst.cloneNode(true));
 
   let isSuperBowl = false;
 
@@ -520,6 +573,11 @@ function buildDoubleRail(items){
 
 function buildStagingSequence(items){
   railStaging.innerHTML = '';
+
+  // PST pill in staging sequence as well
+  const pst = createPSTPill();
+  railStaging.appendChild(pst);
+
   let isSuperBowl = false;
   for(const it of items){
     const node = (it.type === 'roundHeader') ? createHeaderPill(it.header, it.leagueKey) : createGamePill(it);
