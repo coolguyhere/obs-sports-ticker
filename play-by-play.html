@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Vertical Play Highlights — Client Demo</title>
+<title>Vertical Play Highlights — Fixed Client Demo</title>
 <style>
   :root{
     --panel-w: 360px;
@@ -102,6 +102,7 @@
     transition: transform 220ms ease, box-shadow 220ms ease;
     font-size: var(--font-base);
     line-height:1.15;
+    word-break:break-word;
   }
   .play:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.45); }
 
@@ -144,13 +145,12 @@
   /* accessibility focus */
   .v-controls select:focus, .v-controls button:focus { outline: 2px solid rgba(255,255,255,0.08); outline-offset:2px; }
 
-  /* small helper */
   .muted { color: rgba(255,255,255,0.5); font-size:12px; }
 </style>
 </head>
 <body>
 
-<!-- Vertical Play Highlights Ticker (client demo) -->
+<!-- Vertical Play Highlights Ticker (fixed client demo) -->
 <div class="v-ticker" id="vTicker" aria-live="polite" aria-atomic="true" role="region" aria-label="Play highlights">
   <div class="v-header">
     <div>
@@ -176,20 +176,22 @@
   </div>
 
   <div class="v-list">
-    <div class="v-scroll" id="vList" role="list"></div>
+    <div class="v-scroll" id="vList" role="list">
+      <div class="empty" id="emptyHint">Select a league and game, then press Start.</div>
+    </div>
   </div>
 </div>
 
 <script>
 /*
-  Client demo: vertical play highlights ticker
-  - Mobile friendly and OBS overlay friendly
-  - Uses ESPN public JSON patterns via a CORS proxy (client demo only)
-  - Recommended: for production, move requests server-side to avoid CORS and rate limits
+  Fixed client demo:
+  - Uses AllOrigins proxy for client testing (replace with your server proxy for production)
+  - Improved parsing and robust fallbacks for scoreboard and play-by-play
+  - Mobile/OBS friendly
 */
 
 /* CONFIG */
-const PROXY = "https://corsproxy.io/?"; // demo proxy; replace with your server proxy for production
+const PROXY = "https://api.allorigins.win/raw?url="; // testing proxy; replace with your own proxy for production
 const LEAGUE_PATHS = {
   nfl: { sport: "football", league: "nfl" },
   nba: { sport: "basketball", league: "nba" },
@@ -213,6 +215,7 @@ const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
 const vList = document.getElementById('vList');
 const vStatus = document.getElementById('vStatus');
+const emptyHint = document.getElementById('emptyHint');
 
 /* HELPERS */
 function safe(obj, path, fallback = "") {
@@ -220,17 +223,36 @@ function safe(obj, path, fallback = "") {
 }
 function nowISO(){ return new Date().toISOString(); }
 function shortClock(play){
-  // try to extract clock and period
   const clock = safe(play, 'clock', '') || safe(play, 'time', '') || '';
-  const period = safe(play, 'period', '') || safe(play, 'quarter', '') || '';
+  const period = safe(play, 'period', '') || safe(play, 'quarter', '') || safe(play,'periodValue','');
   if(clock && period) return `${period} ${clock}`;
   if(clock) return clock;
   return '';
 }
 function isScoringPlay(play){
-  // heuristics: look for scoring keywords or play type
-  const text = (safe(play,'text','') + ' ' + safe(play,'playType','') + ' ' + safe(play,'type','')).toLowerCase();
-  return /touchdown|td|field goal|fg|score|safety|extra point|two-point|two point|go-ahead|go ahead|scoring/.test(text);
+  const text = (safe(play,'text','') + ' ' + safe(play,'playType','') + ' ' + safe(play,'type','') + ' ' + safe(play,'description','')).toLowerCase();
+  return /touchdown|td|field goal|fg|score|safety|extra point|two-point|two point|go-ahead|go ahead|scoring|made a/.test(text);
+}
+
+/* FETCH helper using AllOrigins proxy for client testing */
+async function fetchJsonViaProxy(url){
+  try{
+    const res = await fetch(PROXY + encodeURIComponent(url), { cache: "no-store" });
+    if(!res.ok){
+      console.warn('proxy fetch non-ok', res.status, url);
+      return null;
+    }
+    const text = await res.text();
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      // sometimes the response is already JSON; try to parse leniently
+      try { return JSON.parse(decodeURIComponent(text)); } catch { return null; }
+    }
+  }catch(err){
+    console.error('fetchJsonViaProxy error', err, url);
+    return null;
+  }
 }
 
 /* RENDER */
@@ -242,13 +264,12 @@ function renderPlayNode(play){
 
   const meta = document.createElement('div');
   meta.className = 'meta';
-  meta.textContent = shortClock(play) || safe(play,'period','');
+  meta.textContent = shortClock(play) || safe(play,'period','') || '';
 
   const body = document.createElement('div');
   body.className = 'body';
-  // prefer descriptive fields
-  const desc = safe(play,'text', '') || safe(play,'description', '') || safe(play,'playDescription','') || '';
-  // highlight team/player names lightly (simple heuristic)
+  const desc = safe(play,'text', '') || safe(play,'playText') || safe(play,'description') || safe(play,'playDescription') || '';
+  // simple highlight for team abbreviations or player initials (heuristic)
   body.innerHTML = desc.replace(/([A-Z]{2,4})/g, '<strong>$1</strong>');
 
   el.appendChild(meta);
@@ -257,11 +278,13 @@ function renderPlayNode(play){
 }
 
 function pushPlay(play){
-  const id = safe(play,'id', null) || (safe(play,'playId', null) || null);
+  const id = safe(play,'id', null) || safe(play,'playId', null) || safe(play,'sequence', null);
   if(id && seenPlays.has(id)) return;
   if(id) seenPlays.add(id);
 
   const node = renderPlayNode(play);
+  // remove empty hint if present
+  if(emptyHint) emptyHint.style.display = 'none';
   // insert at top
   vList.insertBefore(node, vList.firstChild);
 
@@ -275,39 +298,39 @@ function pushPlay(play){
   }
 }
 
-/* FETCH SCOREBOARD -> populate gameSelect */
+/* SCOREBOARD -> populate gameSelect */
 async function fetchScoreboard(leagueKey){
   gameSelect.innerHTML = '<option value="">Loading…</option>';
   const cfg = LEAGUE_PATHS[leagueKey];
   if(!cfg){ gameSelect.innerHTML = '<option value="">No league</option>'; return; }
 
   const url = `https://site.api.espn.com/apis/site/v2/sports/${cfg.sport}/${cfg.league}/scoreboard`;
+  console.log('fetching scoreboard', url);
   try{
-    const res = await fetch(PROXY + encodeURIComponent(url));
-    if(!res.ok) throw new Error('scoreboard fetch failed');
-    const data = await res.json();
+    const data = await fetchJsonViaProxy(url);
+    if(!data){ throw new Error('no scoreboard data'); }
 
     const events = safe(data,'events', []);
-    // build options: show live first, then upcoming, then final
     const opts = [];
+
     for(const ev of events){
       const comp = safe(ev,'competitions.0', {});
-      const id = safe(ev,'id', '') || safe(ev,'uid','');
-      const status = safe(comp,'status.type.state','');
+      const id = safe(ev,'id', '') || safe(ev,'uid','') || safe(comp,'id','');
+      const status = (safe(comp,'status.type.state','') || '').toLowerCase();
       const home = safe(comp,'competitors',[]).find(c=>c.homeAway==='home') || {};
       const away = safe(comp,'competitors',[]).find(c=>c.homeAway==='away') || {};
-      const homeAbbr = safe(home,'team.abbreviation', safe(home,'team.displayName',''));
-      const awayAbbr = safe(away,'team.abbreviation', safe(away,'team.displayName',''));
+      const homeAbbr = (safe(home,'team.abbreviation', safe(home,'team.displayName','')) || '').toUpperCase();
+      const awayAbbr = (safe(away,'team.abbreviation', safe(away,'team.displayName','')) || '').toUpperCase();
       const iso = safe(ev,'date','') || safe(comp,'date','');
-      const kickoff = iso ? new Date(iso).toLocaleString() : '';
-      const label = `${awayAbbr} @ ${homeAbbr} — ${status.toUpperCase() || 'SCHEDULED'} ${kickoff ? '• ' + kickoff : ''}`;
-      opts.push({ id, label, state: status });
+      const kickoff = iso ? new Date(iso).toLocaleString('en-US', { month:'numeric', day:'numeric', hour:'numeric', minute:'2-digit' }) : '';
+      const label = `${awayAbbr} @ ${homeAbbr} — ${status ? status.toUpperCase() : 'SCHEDULED'}${kickoff ? ' • ' + kickoff : ''}`;
+      opts.push({ id, label, state: status, iso });
     }
 
-    // sort: live first, then scheduled, then final
+    // sort: live (in) first, then scheduled (pre/empty), then final/other
     opts.sort((a,b)=>{
       const order = s => (s === 'in' ? 0 : (s === 'pre' || s === '' ? 1 : 2));
-      return order(a.state) - order(b.state);
+      return order(a.state) - order(b.state) || (a.iso || '').localeCompare(b.iso || '');
     });
 
     gameSelect.innerHTML = '<option value="">— select game —</option>';
@@ -318,45 +341,74 @@ async function fetchScoreboard(leagueKey){
       gameSelect.appendChild(opt);
     }
     vStatus.textContent = `loaded ${opts.length} games`;
+    console.log('scoreboard loaded', opts.length, 'games');
   }catch(err){
-    console.error(err);
+    console.error('fetchScoreboard error', err);
     gameSelect.innerHTML = '<option value="">failed to load</option>';
     vStatus.textContent = 'scoreboard error';
   }
 }
 
-/* FETCH play-by-play for eventId */
+/* PLAY-BY-PLAY fetch with multiple fallbacks */
 async function fetchPlayByPlay(leagueKey, eventId){
   if(!eventId) return null;
   const cfg = LEAGUE_PATHS[leagueKey];
   if(!cfg) return null;
 
-  // pattern used by ESPN web app (may vary by sport)
-  const url = `https://site.api.espn.com/apis/site/v2/sports/${cfg.sport}/${cfg.league}/playbyplay?event=${encodeURIComponent(eventId)}`;
-  try{
-    const res = await fetch(PROXY + encodeURIComponent(url));
-    if(!res.ok) throw new Error('playbyplay fetch failed');
-    const data = await res.json();
-    // plays often live under data.plays or data.drives[].plays
-    let plays = safe(data,'plays', null);
-    if(!plays){
-      // try drives -> plays
-      const drives = safe(data,'drives', []);
-      plays = [];
-      for(const d of drives){
-        const p = safe(d,'plays', []);
-        if(Array.isArray(p)) plays.push(...p);
+  const candidates = [
+    `https://site.api.espn.com/apis/site/v2/sports/${cfg.sport}/${cfg.league}/playbyplay?event=${encodeURIComponent(eventId)}`,
+    `https://site.api.espn.com/apis/site/v2/sports/${cfg.sport}/${cfg.league}/summary?event=${encodeURIComponent(eventId)}`,
+    `https://site.api.espn.com/apis/site/v2/sports/${cfg.sport}/${cfg.league}/boxscore?event=${encodeURIComponent(eventId)}`
+  ];
+
+  for(const url of candidates){
+    try{
+      console.log('trying playbyplay candidate', url);
+      const data = await fetchJsonViaProxy(url);
+      if(!data){ console.warn('candidate returned no data', url); continue; }
+
+      // try common locations for plays
+      let plays = safe(data,'plays', null);
+      if(!plays){
+        const drives = safe(data,'drives', []);
+        if(Array.isArray(drives) && drives.length){
+          plays = [];
+          for(const d of drives){
+            const p = safe(d,'plays', []);
+            if(Array.isArray(p)) plays.push(...p);
+          }
+        }
       }
+      if(!plays) plays = safe(data,'playByPlay.plays', null);
+      if(!plays) plays = safe(data,'gamepackageJSON.plays', null);
+      if(!plays && safe(data,'boxscore',null)) {
+        // some sports embed play-like events in other fields; try to find them
+        plays = safe(data,'boxscore.plays', null) || safe(data,'boxscore.playByPlay', null);
+      }
+
+      if(Array.isArray(plays) && plays.length){
+        console.info('playbyplay found via', url, 'plays:', plays.length);
+        // normalize minimal fields
+        return plays.map((p, idx) => {
+          return {
+            id: safe(p,'id') || safe(p,'playId') || safe(p,'sequence') || (`${idx}_${safe(p,'clock','')}`),
+            text: safe(p,'text') || safe(p,'description') || safe(p,'playText') || safe(p,'playDescription') || '',
+            clock: safe(p,'clock') || safe(p,'time') || '',
+            period: safe(p,'period') || safe(p,'quarter') || '',
+            raw: p
+          };
+        });
+      }
+
+      // if plays is an empty array, still return it (no plays yet)
+      if(Array.isArray(plays)) return plays;
+    }catch(err){
+      console.warn('fetchPlayByPlay candidate error', err, url);
     }
-    // fallback: try data.playByPlay.plays
-    if(!plays) plays = safe(data,'playByPlay.plays', []);
-    // normalize: ensure each play has id and text
-    if(!Array.isArray(plays)) plays = [];
-    return plays;
-  }catch(err){
-    console.error('playbyplay error', err);
-    return null;
   }
+
+  console.warn('no play-by-play found for', leagueKey, eventId);
+  return null;
 }
 
 /* POLLER */
@@ -370,18 +422,14 @@ async function pollPlays(){
     return;
   }
 
-  // plays may be in chronological order; we want newest first
-  // iterate from end to start to push newest first
+  // plays may be chronological; push newest first
   for(let i = plays.length - 1; i >= 0; i--){
     const p = plays[i];
-    // normalize id: try multiple fields
-    const id = safe(p,'id') || safe(p,'playId') || safe(p,'sequence') || (safe(p,'clock') + '_' + i);
-    if(!id) p.id = nowISO() + '_' + i; else p.id = id;
-    // text fields vary by sport: try multiple
-    p.text = safe(p,'text') || safe(p,'playText') || safe(p,'description') || safe(p,'playDescription') || '';
-    p.clock = safe(p,'clock') || safe(p,'time') || '';
-    p.period = safe(p,'period') || safe(p,'quarter') || '';
-    // push
+    // ensure id and text exist
+    p.id = p.id || (`play_${i}_${Date.now()}`);
+    p.text = p.text || (typeof p === 'string' ? p : safe(p,'raw.description',''));
+    p.clock = p.clock || safe(p,'raw.clock','');
+    p.period = p.period || safe(p,'raw.period','');
     pushPlay(p);
   }
   vStatus.textContent = `updated ${new Date().toLocaleTimeString()}`;
@@ -396,8 +444,8 @@ function startPolling(){
   isRunning = true;
   seenPlays.clear();
   vList.innerHTML = '';
+  if(emptyHint) emptyHint.style.display = 'none';
   vStatus.textContent = 'starting…';
-  // initial fetch then interval
   pollPlays();
   pollTimer = setInterval(pollPlays, POLL_INTERVAL_MS);
 }
@@ -419,6 +467,9 @@ fetchScoreboard(leagueSelect.value);
 
 /* optional: refresh scoreboard periodically */
 setInterval(()=> fetchScoreboard(leagueSelect.value), 30000);
+
+/* Debugging helper: show network errors in console */
+window.addEventListener('error', (e) => console.error('Window error', e));
 </script>
 </body>
 </html>
