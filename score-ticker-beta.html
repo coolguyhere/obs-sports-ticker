@@ -556,7 +556,8 @@ function createGamePill(item){
   }
 
   // visual emphasis for high-leverage (optional)
-  if(isHighLeverage && typeof isHighLeverage === 'function' && isHighLeverage(item)){
+  if (isHighLeverage(item)) {
+
     pill.classList.add('high-leverage');
   }
 
@@ -632,7 +633,12 @@ function applySuperBowlTheme(hasSB){
    ------------------------- */
 function computeDynamicSpeed(){
   const primaryWidth = rail.scrollWidth || 1;
-  const base = primaryWidth / TARGET_LOOP_SECONDS;
+  if (primaryWidth < viewport.clientWidth + 50) {
+  return MIN_SPEED;
+}
+
+const base = primaryWidth / TARGET_LOOP_SECONDS;
+
   // apply slowdown if high-leverage present
   const multiplier = highLeveragePresent ? SLOW_FACTOR : 1;
   return base * multiplier;
@@ -713,7 +719,12 @@ async function bootstrapTicker(){
   buildDoubleRail(items);
   applySuperBowlTheme(items.some(i => i.type === 'superbowl'));
 
-  requestAnimationFrame(loopFrame);
+  // ✅ FIX #4 — PLACE IT HERE
+  const primaryWidth = rail.scrollWidth || 1;
+  railDup.style.transform = `translateX(${primaryWidth}px)`;
+
+  startLoopWhenReady();
+
   // refresh every 15s; fetchScores has cache to avoid rapid re-fetch
   setInterval(refreshData, 15000);
 }
@@ -722,6 +733,7 @@ async function bootstrapTicker(){
    START
    ------------------------- */
 bootstrapTicker();
+
 </script>
 
 </body>
