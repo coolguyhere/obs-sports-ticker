@@ -69,11 +69,11 @@ html,body{height:100%;margin:0;background:#000;font-family:Arial,Helvetica,sans-
 }
 
 /* Pills (now flex with left main + right status) */
+/* Pills — make left content and right status layout */
 .pill{
   display:flex;
   align-items:center;
   justify-content:space-between;
-  min-width:220px;
   background:var(--pill-bg);
   color:var(--text);
   padding:var(--pill-pad);
@@ -83,13 +83,16 @@ html,body{height:100%;margin:0;background:#000;font-family:Arial,Helvetica,sans-
   height:calc(var(--bar-h) - 12px);
   border:1px solid rgba(255,255,255,0.12);
   box-shadow:0 0 6px rgba(0,0,0,0.45);
-  gap:12px;
+  gap:8px;
   box-sizing:border-box;
 }
 
 /* left group contains logos + abbreviations */
 .pill-left{ display:flex; align-items:center; gap:8px; white-space:nowrap; overflow:hidden; }
-.pill-status{ min-width:72px; text-align:right; font-weight:700; white-space:nowrap; }
+
+/* right-aligned status */
+.pill-status{ min-width:72px; text-align:right; font-weight:700; white-space:nowrap; margin-left:12px; }
+
 
 /* PST pill */
 .pst-pill{
@@ -445,31 +448,37 @@ function createSuperBowlPill(){
   return pill;
 }
 
-function periodLabelForLeague(leagueKey, period, displayClock, statusText){
-  // prefer explicit OT text if present
-  const st = (statusText||'').toUpperCase();
-  if(st.includes('OT') || st.includes('OVERTIME')) return 'OT';
+function periodLabelForLeague(leagueKey, period, displayClock = '', statusText = '') {
+  const st = (statusText || '').toUpperCase();
 
-  // if no numeric period available, fall back to status text
-  if((period === null || period === undefined || period === '') && st) {
-    return st || '';
-  }
+  // explicit OT / OVERTIME override
+  if (st.includes('OT') || st.includes('OVERTIME')) return 'OT';
 
-  const p = Number(period);
-  if(!Number.isFinite(p)) {
-    // fallback: use statusText if it looks like "Top 7th" / "Bot 9th"
-    if(st) return st;
+  // if no numeric period, fall back to readable status (Top/Bot etc)
+  if (period === null || period === undefined || period === '') {
+    if (st) return st;
     return '';
   }
 
-  // league-specific
-  if(leagueKey === 'mlb') {
-    // MLB: if statusText contains "Top" or "Bot" use it, otherwise show inning
-    if(/TOP|BOT/i.test(st)) return st;
+  const p = Number(period);
+  if (!Number.isFinite(p)) {
+    if (st) return st;
+    return '';
+  }
+
+  // league-specific labels
+  if (leagueKey === 'mlb') {
+    // MLB: prefer Top/Bottom wording from status if present ("Top 7th", "Bot 9th")
+    if (/TOP|BOT/i.test(st)) return st;
     return `IN ${p}`;
   }
-  if(leagueKey === 'nhl') return `P${p}`;            // period
-  if(leagueKey === 'nfl' || leagueKey === 'nba') return `Q${p}`; // quarter
+  if (leagueKey === 'nhl') {
+    return `P${p}`; // period
+  }
+  if (leagueKey === 'nfl' || leagueKey === 'nba') {
+    return `Q${p}`; // quarter
+  }
+
   return `P${p}`;
 }
 
@@ -501,7 +510,7 @@ function createGamePill(item){
   awayAbbr.textContent = item.away.abbr;
   left.appendChild(awayAbbr);
 
-  // score / kickoff block
+  // score / kickoff block (keeps inline)
   if(item.isLive){
     const pair = document.createElement('div');
     pair.className = 'score-pair';
@@ -555,9 +564,8 @@ function createGamePill(item){
     status.classList.add('status-future');
   }
 
-  // visual emphasis for high-leverage (optional)
+  // visual emphasis for high-leverage
   if (isHighLeverage(item)) {
-
     pill.classList.add('high-leverage');
   }
 
