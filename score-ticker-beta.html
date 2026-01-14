@@ -640,8 +640,8 @@ function computeDynamicSpeed(){
 const base = primaryWidth / TARGET_LOOP_SECONDS;
 
   // apply slowdown if high-leverage present
-  const multiplier = highLeveragePresent ? SLOW_FACTOR : 1;
-  return base * multiplier;
+  return base;
+
 }
 
 /* -------------------------
@@ -702,30 +702,6 @@ async function refreshData(){
     applySuperBowlTheme(hasSuperBowl);
   });
 }
-// ---------- Add this BEFORE bootstrapTicker() (or before loopFrame) ----------
-function startLoopWhenReady() {
-  const tryStart = () => {
-    const primaryWidth = rail.scrollWidth || 0;
-    const vw = viewport ? viewport.clientWidth : window.innerWidth;
-
-    // If we have a usable width, position duplicate rail and start animation.
-    if (primaryWidth > 0) {
-      // ensure duplicate rail is positioned exactly one rail width to the right
-      railDup.style.transform = `translateX(${primaryWidth}px)`;
-
-      // reset timing so rAF loop calculates dt correctly on first frame
-      lastTs = null;
-      requestAnimationFrame(loopFrame);
-      return;
-    }
-
-    // No width yet (images/layout not ready) — try again shortly.
-    // We use a short timer to avoid busy recursive rAF loops while loading.
-    setTimeout(tryStart, 100);
-  };
-
-  tryStart();
-}
 
 /* -------------------------
    BOOTSTRAP
@@ -747,7 +723,16 @@ async function bootstrapTicker(){
   const primaryWidth = rail.scrollWidth || 1;
   railDup.style.transform = `translateX(${primaryWidth}px)`;
 
-  startLoopWhenReady();
+  // force initial positioning
+const primaryWidth = rail.scrollWidth || 1;
+x = 0;
+rail.style.transform = `translateX(0px)`;
+railDup.style.transform = `translateX(${primaryWidth}px)`;
+
+// start animation immediately
+lastTs = null;
+requestAnimationFrame(loopFrame);
+
 
   // refresh every 15s; fetchScores has cache to avoid rapid re-fetch
   setInterval(refreshData, 15000);
