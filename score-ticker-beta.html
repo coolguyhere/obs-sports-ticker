@@ -362,16 +362,18 @@ function createGamePill(it){
 
   const state=gameState(it);
 
+  /* SCORE GOES BETWEEN ABBREVIATIONS */
+  let scoreElement=null;
+
   if(state===0){
-    const t=document.createElement('span');
-    t.className='score-text';
-    t.textContent=formatDateTimeMMDD(it.iso);
-    statusInline.appendChild(t);
+    scoreElement=document.createElement('span');
+    scoreElement.className='score-text';
+    scoreElement.textContent=formatDateTimeMMDD(it.iso);
   }
   else if(state===1){
-    const scorePair=document.createElement('div');
-    scorePair.className='score-pair';
-    scorePair.innerHTML=`<span>${it.away.score}</span><span>–</span><span>${it.home.score}</span>`;
+    scoreElement=document.createElement('div');
+    scoreElement.className='score-pair';
+    scoreElement.innerHTML=`<span>${it.away.score}</span><span>–</span><span>${it.home.score}</span>`;
 
     const stack=document.createElement('div');
     stack.className='status-stack';
@@ -387,24 +389,23 @@ function createGamePill(it){
     stack.appendChild(main);
     stack.appendChild(sub);
 
-    statusInline.appendChild(scorePair);
     statusInline.appendChild(stack);
   }
   else{
-    const score=document.createElement('span');
-    score.className='score-text';
-    score.textContent=`${it.away.score} - ${it.home.score}`;
+    scoreElement=document.createElement('span');
+    scoreElement.className='score-text';
+    scoreElement.textContent=`${it.away.score} - ${it.home.score}`;
 
     const badge=document.createElement('span');
     badge.className='final-badge';
     badge.textContent='FINAL';
 
-    statusInline.appendChild(score);
     statusInline.appendChild(badge);
   }
 
   pill.appendChild(awayLogo);
   pill.appendChild(away);
+  pill.appendChild(scoreElement);
   pill.appendChild(home);
   pill.appendChild(homeLogo);
   pill.appendChild(statusInline);
