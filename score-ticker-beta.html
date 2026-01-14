@@ -450,52 +450,63 @@ function createSuperBowlPill(){
   return pill;
 }
 
-function periodLabelForLeague(leagueKey, period){
-  if(!period && period !== 0) return '';
-  const p = Number(period);
-  if(Number.isFinite(p)){
-    if(leagueKey === 'mlb') return `IN ${p}`;           // inning
-    if(leagueKey === 'nhl') return `P${p}`;            // period
-    if(leagueKey === 'nfl' || leagueKey === 'nba') return `Q${p}`; // quarter
-    return `P${p}`;
+function periodLabelForLeague(leagueKey, period, displayClock, statusText){
+  // prefer explicit OT text if present
+  const st = (statusText||'').toUpperCase();
+  if(st.includes('OT') || st.includes('OVERTIME')) return 'OT';
+
+  // if no numeric period available, fall back to status text
+  if((period === null || period === undefined || period === '') && st) {
+    return st || '';
   }
-  return String(period).toUpperCase();
+
+  const p = Number(period);
+  if(!Number.isFinite(p)) {
+    // fallback: use statusText if it looks like "Top 7th" / "Bot 9th"
+    if(st) return st;
+    return '';
+  }
+
+  // league-specific
+  if(leagueKey === 'mlb') {
+    // MLB: if statusText contains "Top" or "Bot" use it, otherwise show inning
+    if(/TOP|BOT/i.test(st)) return st;
+    return `IN ${p}`;
+  }
+  if(leagueKey === 'nhl') return `P${p}`;            // period
+  if(leagueKey === 'nfl' || leagueKey === 'nba') return `Q${p}`; // quarter
+  return `P${p}`;
 }
+
 
 function createGamePill(item){
   const pill = document.createElement('span');
   pill.className = 'pill';
 
-  // left block
+  // left block (league logo + team/score flow)
   const left = document.createElement('div');
   left.className = 'pill-left';
 
+  // optional league logo (small)
+  const leagueLogo = document.createElement('img');
+  leagueLogo.className = 'logo';
+  leagueLogo.src = LEAGUE_LOGOS[item.leagueKey] || '';
+  leagueLogo.alt = item.leagueKey ? item.leagueKey.toUpperCase() : '';
+  leagueLogo.onerror = () => leagueLogo.hidden = true;
+  left.appendChild(leagueLogo);
+
+  // away logo + abbr
   const awayLogo = document.createElement('img');
   awayLogo.className = 'team-logo';
   awayLogo.src = item.away.logo || '';
   awayLogo.onerror = ()=>awayLogo.hidden = true;
+  left.appendChild(awayLogo);
 
-  const away = document.createElement('span');
-  away.textContent = item.away.abbr;
+  const awayAbbr = document.createElement('span');
+  awayAbbr.textContent = item.away.abbr;
+  left.appendChild(awayAbbr);
 
-  const vs = document.createElement('span');
-  vs.textContent = ' ';
-
-  const home = document.createElement('span');
-  home.textContent = item.home.abbr;
-
-  const homeLogo = document.createElement('img');
-  homeLogo.className = 'team-logo';
-  homeLogo.src = item.home.logo || '';
-  homeLogo.onerror = ()=>homeLogo.hidden = true;
-
-  // main score area sits left (teams + scores)
-  const scoreBlock = document.createElement('div');
-  scoreBlock.style.display = 'flex';
-  scoreBlock.style.alignItems = 'center';
-  scoreBlock.style.gap = '8px';
-
-  // team + score arrangement
+  // score / kickoff block
   if(item.isLive){
     const pair = document.createElement('div');
     pair.className = 'score-pair';
@@ -508,67 +519,58 @@ function createGamePill(item){
     pair.appendChild(awayScore);
     pair.appendChild(dash);
     pair.appendChild(homeScore);
-
-    // left: awayLogo + awayAbbr
-    left.appendChild(awayLogo);
-    left.appendChild(away);
-    // then score pair in left too
-    scoreBlock.appendChild(pair);
-    // then homeAbbr + logo appended later
-  } else if(gameState(item) === 2) {
-    // final
+    left.appendChild(pair);
+  } else if((item.statusText||'').toUpperCase().includes('FINAL')) {
     const finalText = document.createElement('span');
     finalText.className = 'score-text';
     finalText.textContent = `${item.away.score} - ${item.home.score} FINAL`;
-    scoreBlock.appendChild(finalText);
-    left.appendChild(awayLogo);
-    left.appendChild(away);
+    left.appendChild(finalText);
   } else {
-    // future
     const upcoming = document.createElement('span');
     upcoming.className = 'score-text';
     upcoming.textContent = item.kickoff || formatDateTimeMMDD(item.iso);
-    scoreBlock.appendChild(upcoming);
-    left.appendChild(awayLogo);
-    left.appendChild(away);
+    left.appendChild(upcoming);
   }
 
-  // always append home to left block after scoreBlock for visual flow
-  left.appendChild(scoreBlock);
-  left.appendChild(home);
+  // home abbr + logo
+  const homeAbbr = document.createElement('span');
+  homeAbbr.textContent = item.home.abbr;
+  left.appendChild(homeAbbr);
+
+  const homeLogo = document.createElement('img');
+  homeLogo.className = 'team-logo';
+  homeLogo.src = item.home.logo || '';
+  homeLogo.onerror = ()=>homeLogo.hidden = true;
   left.appendChild(homeLogo);
 
-  // right status block (far-right of pill)
+  // right status block (far right of pill)
   const status = document.createElement('div');
   status.className = 'pill-status';
 
   const state = gameState(item);
   if(state === 1){ // live
-    status.textContent = (function(){
-      const pLabel = periodLabelForLeague(item.leagueKey, item.period);
-      return `LIVE${pLabel ? ' ' + pLabel : ''}`;
-    })();
+    const periodLabel = periodLabelForLeague(item.leagueKey, item.period, item.displayClock, item.statusText);
+    status.textContent = periodLabel ? `LIVE ${periodLabel}` : 'LIVE';
     status.classList.add('status-live');
   } else if(state === 2) {
     status.textContent = 'FINAL';
     status.classList.add('status-final');
   } else {
-    // future
     status.textContent = item.kickoff || '';
     status.classList.add('status-future');
   }
 
-  // high-leverage visual
-  if(isHighLeverage(item)){
+  // visual emphasis for high-leverage (optional)
+  if(isHighLeverage && typeof isHighLeverage === 'function' && isHighLeverage(item)){
     pill.classList.add('high-leverage');
   }
 
-  // assemble pill
   pill.appendChild(left);
   pill.appendChild(status);
 
   return pill;
 }
+
 
 /* -------------------------
    BUILD DOUBLE RAILS
