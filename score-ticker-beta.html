@@ -670,14 +670,16 @@ function loopFrame(ts){
 
   x -= dynamicSpeed * dt;
 
-  const primaryWidth = rail.scrollWidth || 1;
+  const railWidth = rail.scrollWidth || 1;
 
-  if(Math.abs(x) >= primaryWidth){
-    x += primaryWidth;
-  }
 
-  rail.style.transform = `translateX(${x}px)`;
-  railDup.style.transform = `translateX(${x + primaryWidth}px)`;
+if(Math.abs(x) >= railWidth){
+  x += railWidth;
+}
+
+rail.style.transform = `translateX(${x}px)`;
+railDup.style.transform = `translateX(${x + railWidth}px)`;
+
 
   requestAnimationFrame(loopFrame);
 }
