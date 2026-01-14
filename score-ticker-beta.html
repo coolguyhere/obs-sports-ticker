@@ -362,7 +362,6 @@ function createGamePill(it){
 
   const state=gameState(it);
 
-  /* SCORE GOES BETWEEN ABBREVIATIONS */
   let scoreElement=null;
 
   if(state===0){
@@ -373,7 +372,11 @@ function createGamePill(it){
   else if(state===1){
     scoreElement=document.createElement('div');
     scoreElement.className='score-pair';
-    scoreElement.innerHTML=`<span>${it.away.score}</span><span>–</span><span>${it.home.score}</span>`;
+    scoreElement.innerHTML=`
+      <span>${it.away.score}</span>
+      <span>–</span>
+      <span>${it.home.score}</span>
+    `;
 
     const stack=document.createElement('div');
     stack.className='status-stack';
